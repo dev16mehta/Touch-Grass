@@ -6,7 +6,25 @@ import './App.css'
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
+// Validate and set API URL
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl) {
+    // Ensure it has protocol and host
+    if (envUrl.startsWith('http://') || envUrl.startsWith('https://')) {
+      return envUrl
+    }
+    // If it starts with :, it's likely malformed
+    if (envUrl.startsWith(':')) {
+      console.warn('Invalid VITE_API_URL format. Using default.')
+      return 'http://localhost:5001/api'
+    }
+    return envUrl
+  }
+  return 'http://localhost:5001/api'
+}
+
+const API_URL = getApiUrl()
 
 function App() {
   const [vibes, setVibes] = useState([])
@@ -113,9 +131,18 @@ function App() {
     try {
       const response = await axios.get(`${API_URL}/vibes`)
       setVibes(response.data.vibes)
+      setError(null) // Clear any previous errors
     } catch (err) {
       console.error('Error fetching vibes:', err)
-      setError('Failed to load vibes')
+      // Provide fallback vibes if API is unavailable
+      const fallbackVibes = [
+        { id: 'chill', name: 'Chill', emoji: '🌿' },
+        { id: 'date', name: 'Date', emoji: '💕' },
+        { id: 'chaos', name: 'Chaos', emoji: '🍻' },
+        { id: 'aesthetic', name: 'Aesthetic', emoji: '📸' }
+      ]
+      setVibes(fallbackVibes)
+      setError('Backend server not running. Using fallback vibes. Please start the backend server at http://localhost:5001')
     }
   }
 
