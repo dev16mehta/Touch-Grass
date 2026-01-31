@@ -4,7 +4,6 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-import googlemaps
 
 from config import VIBE_CONFIGS
 from services.ai_service import detect_vibe_from_text, generate_route_description
@@ -21,11 +20,8 @@ CORS(app)
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 gemini_model = genai.GenerativeModel('gemini-pro')
 
-# Configure Google Maps
-GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
-gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
-
 # API Keys
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
 
@@ -34,7 +30,7 @@ def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'google_maps_configured': gmaps is not None,
+        'google_maps_configured': GOOGLE_MAPS_API_KEY is not None,
         'gemini_configured': os.getenv('GEMINI_API_KEY') is not None,
         'openrouter_configured': OPENROUTER_API_KEY is not None
     })
@@ -71,7 +67,7 @@ def detect_vibe():
 
         # If location was extracted, geocode it
         if result.get('location'):
-            geocoded = geocode_location(gmaps, result['location'])
+            geocoded = geocode_location(GOOGLE_MAPS_API_KEY, result['location'])
             if geocoded:
                 result['geocoded_location'] = {
                     'latitude': geocoded['latitude'],
@@ -113,7 +109,7 @@ def generate_route():
         if vibe not in VIBE_CONFIGS:
             return jsonify({'error': f'Invalid vibe. Choose from: {list(VIBE_CONFIGS.keys())}'}), 400
 
-        if not gmaps:
+        if not GOOGLE_MAPS_API_KEY:
             return jsonify({'error': 'Google Maps API not configured'}), 500
 
         if duration < 10 or duration > 120:
@@ -126,7 +122,7 @@ def generate_route():
         # Check if area is already indexed in our database
         if not place_service.is_area_indexed(latitude, longitude, search_radius):
             # Discover all places in area
-            raw_places = discover_all_places(gmaps, latitude, longitude, search_radius)
+            raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, latitude, longitude, search_radius)
 
             # Categorize each place (static mapping or LLM for unknown types)
             places_to_save = []
@@ -150,7 +146,7 @@ def generate_route():
 
             # Check if expanded area needs indexing
             if not place_service.is_area_indexed(latitude, longitude, expanded_radius):
-                raw_places = discover_all_places(gmaps, latitude, longitude, expanded_radius)
+                raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, latitude, longitude, expanded_radius)
                 places_to_save = []
                 for place in raw_places:
                     vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
@@ -161,11 +157,11 @@ def generate_route():
 
             places = place_service.get_places_by_vibe(latitude, longitude, expanded_radius, vibe)
 
-        # Fallback to legacy method if still no places
+        # Fallback to direct API call if still no places
         if not places:
-            places = get_google_places(gmaps, latitude, longitude, vibe, search_radius)
+            places = get_google_places(GOOGLE_MAPS_API_KEY, latitude, longitude, vibe, search_radius)
             if not places:
-                places = get_google_places(gmaps, latitude, longitude, vibe, min(search_radius * 2, 10000))
+                places = get_google_places(GOOGLE_MAPS_API_KEY, latitude, longitude, vibe, min(search_radius * 2, 10000))
 
         # Optimize waypoints
         waypoints = optimize_waypoints(
@@ -174,7 +170,7 @@ def generate_route():
         )
 
         # Get directions
-        directions = get_google_directions(gmaps, waypoints)
+        directions = get_google_directions(GOOGLE_MAPS_API_KEY, waypoints)
 
         if not directions:
             return jsonify({'error': 'Could not generate route. Try a different location or duration.'}), 500

@@ -137,33 +137,123 @@
   opacity: 0.95;
 }
 
+/* Places Section */
+.places-section {
+  margin-top: 1.5rem;
+}
+
+.places-section h4 {
+  font-size: 1.1rem;
+  margin-bottom: 0.25rem;
+}
+
+.places-subtitle {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-bottom: 1rem;
+}
+
 .places-list {
-  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.places-list h4 {
-  font-size: 1rem;
-  margin-bottom: 0.75rem;
-  opacity: 0.9;
+.place-card {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 0.875rem;
+  transition: all 0.2s ease;
 }
 
-.place-item {
+.place-card:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateX(4px);
+}
+
+.place-header {
   display: flex;
   justify-content: space-between;
-  padding: 0.75rem;
+  align-items: flex-start;
   margin-bottom: 0.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  font-size: 0.9rem;
 }
 
 .place-name {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  flex: 1;
+  margin-right: 0.5rem;
 }
 
 .place-distance {
-  opacity: 0.8;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.place-details {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.place-type {
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  opacity: 0.9;
+}
+
+.place-rating {
+  font-size: 0.8rem;
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.rating-value {
+  color: white;
+  opacity: 0.85;
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.place-vibes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.vibe-tag {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 0.7;
+  text-transform: capitalize;
+}
+
+.vibe-tag-active {
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.places-more {
   font-size: 0.85rem;
+  opacity: 0.7;
+  text-align: center;
+  margin-top: 0.75rem;
+  font-style: italic;
 }
 
 .map-container {
