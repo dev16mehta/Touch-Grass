@@ -27,9 +27,15 @@ def calculate_route_parameters(duration_minutes, vibe, is_circular):
 
 
 def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_circular):
-    """Select optimal waypoints based on route type"""
+    """
+    Select optimal waypoints based on route type
+    Returns: (waypoints, selected_places)
+        waypoints: list of (lat, lon) tuples
+        selected_places: list of place objects that were selected as waypoints
+    """
     if not places:
-        return create_simple_circular_route(start_lat, start_lon, target_distance)
+        waypoints = create_simple_circular_route(start_lat, start_lon, target_distance)
+        return waypoints, []
 
     # Use 2 waypoints for circular (to create a loop), 2 for one-way
     num_waypoints = 2
@@ -112,6 +118,7 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
                 (waypoint2['latitude'], waypoint2['longitude']),
                 (start_lat, start_lon)
             ]
+            selected_places = [waypoint1, waypoint2]
         elif scored_places:
             # Only 1 place available - create simple out-and-back
             waypoint = scored_places[0][0]
@@ -120,9 +127,11 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
                 (waypoint['latitude'], waypoint['longitude']),
                 (start_lat, start_lon)
             ]
+            selected_places = [waypoint]
         else:
             # No places - use fallback
-            return create_simple_circular_route(start_lat, start_lon, target_distance)
+            waypoints = create_simple_circular_route(start_lat, start_lon, target_distance)
+            return waypoints, []
 
     else:
         # One-way: select endpoint and waypoints based on vibe preferences
@@ -199,11 +208,13 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
             waypoints = [(start_lat, start_lon)] + [
                 (p['latitude'], p['longitude']) for p in intermediates
             ] + [(endpoint['latitude'], endpoint['longitude'])]
+            selected_places = intermediates + [endpoint]
         else:
             # Fallback to simple route
             waypoints = [(start_lat, start_lon), (start_lat + 0.001, start_lon + 0.001)]
+            selected_places = []
 
-    return waypoints
+    return waypoints, selected_places
 
 
 def create_simple_circular_route(lat, lon, target_distance):

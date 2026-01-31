@@ -8,7 +8,7 @@ import googlemaps
 
 from config import VIBE_CONFIGS
 from services.ai_service import detect_vibe_from_text, generate_route_description
-from services.google_maps_service import get_google_places, get_google_directions, geocode_location
+from services.google_maps_service import get_google_places, get_google_directions, geocode_location, reverse_geocode
 from services.route_service import calculate_route_parameters, optimize_waypoints
 
 load_dotenv()
@@ -130,7 +130,7 @@ def generate_route():
             places = get_google_places(gmaps, latitude, longitude, vibe, min(search_radius * 2, 10000))
 
         # Optimize waypoints
-        waypoints = optimize_waypoints(
+        waypoints, selected_places = optimize_waypoints(
             latitude, longitude, places.copy(),
             route_params['target_distance'], vibe, is_circular
         )
@@ -142,7 +142,38 @@ def generate_route():
             return jsonify({'error': 'Could not generate route. Try a different location or duration.'}), 500
 
         # Generate AI description
-        description = generate_route_description(gemini_model, vibe, places)
+        description = generate_route_description(gemini_model, vibe, places if places else selected_places)
+
+        # If no selected places (fallback route), create synthetic waypoints from route
+        waypoints_to_send = selected_places if selected_places else []
+
+        # Ensure we always have at least 1-5 waypoints to display
+        if not waypoints_to_send and places:
+            waypoints_to_send = places[:5]
+        elif not waypoints_to_send:
+            # Create synthetic waypoints from the route coordinates
+            coords = directions['coordinates']
+            if len(coords) >= 3:
+                # Take evenly spaced points along the route
+                interval = len(coords) // min(3, len(coords))
+                waypoints_to_send = []
+                for i in range(1, min(4, len(coords))):
+                    idx = i * interval
+                    if idx < len(coords):
+                        coord = coords[idx]
+                        # Get actual place name via reverse geocoding
+                        place_name = reverse_geocode(gmaps, coord[1], coord[0])
+                        if not place_name:
+                            place_name = f'Point of Interest {i}'
+
+                        waypoints_to_send.append({
+                            'name': place_name,
+                            'type': 'point_of_interest',
+                            'latitude': coord[1],
+                            'longitude': coord[0],
+                            'distance': i * (directions['distance'] / 4),
+                            'rating': 0
+                        })
 
         return jsonify({
             'vibe': vibe,
@@ -153,7 +184,7 @@ def generate_route():
                 'duration': directions['duration'],
                 'polyline': directions['polyline']
             },
-            'waypoints': places[:10],
+            'waypoints': waypoints_to_send,
             'directions': {
                 'steps': directions['steps']
             },

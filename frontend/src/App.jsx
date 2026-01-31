@@ -5,7 +5,7 @@ import { useState } from 'react'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import './App.css'
 
-import { Map, MoodSelector, DurationSelector, RouteTypeSelector, RouteInfo } from './components'
+import { Map, MoodSelector, DurationSelector, RouteTypeSelector, RouteInfo, RoutePopup } from './components'
 import { useLocation, useVibeDetection, useRouteGeneration } from './hooks'
 
 const getVibeColor = (vibe) => {
@@ -139,6 +139,7 @@ function App() {
           routeData={routeData}
           selectedVibe={selectedVibe}
         />
+        <RoutePopup routeData={routeData} />
       </div>
     </div>
   )

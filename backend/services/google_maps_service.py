@@ -38,6 +38,72 @@ def geocode_location(gmaps_client, location_name):
         return None
 
 
+def reverse_geocode(gmaps_client, lat, lon):
+    """
+    Reverse geocode coordinates to get place name (prioritizing landmarks/buildings over addresses)
+    Returns a readable place name or None if not found
+    """
+    if not gmaps_client:
+        return None
+
+    try:
+        results = gmaps_client.reverse_geocode((lat, lon))
+
+        if not results:
+            return None
+
+        # Priority 1: Look for named places (POIs, landmarks, parks, buildings)
+        for result in results:
+            types = result.get('types', [])
+
+            # Check for named establishments, landmarks, parks, etc.
+            landmark_types = [
+                'point_of_interest', 'establishment', 'park', 'natural_feature',
+                'tourist_attraction', 'museum', 'art_gallery', 'church', 'mosque',
+                'synagogue', 'hindu_temple', 'stadium', 'shopping_mall', 'library',
+                'university', 'school', 'hospital', 'train_station', 'subway_station',
+                'bus_station', 'airport', 'cafe', 'restaurant', 'bar', 'store'
+            ]
+
+            if any(t in types for t in landmark_types):
+                # Get the actual name of the place
+                place_name = result.get('name')
+                if place_name and not place_name.isdigit():  # Avoid numeric-only names
+                    return place_name
+
+        # Priority 2: Look for neighborhoods, localities, or areas
+        for result in results:
+            types = result.get('types', [])
+
+            area_types = ['neighborhood', 'sublocality', 'locality', 'administrative_area_level_3']
+
+            if any(t in types for t in area_types):
+                parts = result['formatted_address'].split(',')
+                if parts and parts[0]:
+                    return parts[0]
+
+        # Priority 3: Fallback to first non-street-address result
+        for result in results:
+            types = result.get('types', [])
+
+            # Skip street addresses
+            if 'street_address' not in types and 'route' not in types:
+                parts = result['formatted_address'].split(',')
+                if parts and parts[0]:
+                    return parts[0]
+
+        # Last resort: use the first result
+        if results:
+            parts = results[0]['formatted_address'].split(',')
+            return parts[0] if parts else "Point of Interest"
+
+        return None
+
+    except Exception as e:
+        print(f"Reverse geocoding error for ({lat}, {lon}): {e}")
+        return None
+
+
 def get_google_places(gmaps_client, lat, lon, vibe, radius):
     """Fetch nearby places using Google Places API"""
     if not gmaps_client:
