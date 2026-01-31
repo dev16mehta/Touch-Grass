@@ -4,6 +4,40 @@ from config import VIBE_CONFIGS
 from utils.geo_utils import calculate_distance
 
 
+def geocode_location(gmaps_client, location_name):
+    """
+    Geocode a location name to coordinates
+    Returns dict with latitude, longitude, and formatted_address, or None if not found
+    """
+    if not gmaps_client or not location_name:
+        return None
+
+    try:
+        # Add country bias for better results (can be made configurable)
+        geocode_result = gmaps_client.geocode(location_name)
+
+        if not geocode_result:
+            print(f"Geocoding: No results found for '{location_name}'")
+            return None
+
+        result = geocode_result[0]
+        location = result['geometry']['location']
+
+        return {
+            'latitude': location['lat'],
+            'longitude': location['lng'],
+            'formatted_address': result['formatted_address'],
+            'place_id': result.get('place_id')
+        }
+
+    except Exception as e:
+        print(f"Geocoding error for '{location_name}': {e}")
+        # Check if it's an API permission error
+        if 'REQUEST_DENIED' in str(e):
+            print("ERROR: Geocoding API not enabled. Please enable it in Google Cloud Console.")
+        return None
+
+
 def get_google_places(gmaps_client, lat, lon, vibe, radius):
     """Fetch nearby places using Google Places API"""
     if not gmaps_client:
