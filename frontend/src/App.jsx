@@ -20,7 +20,7 @@ const getVibeColor = (vibe) => {
 
 function App() {
   const [selectedVibe, setSelectedVibe] = useState('chill')
-  const [duration, setDuration] = useState(30)
+  const [duration, setDuration] = useState('')
   const [isCircular, setIsCircular] = useState(true)
 
   // Custom hooks
@@ -115,7 +115,7 @@ function App() {
         <button
           className="generate-button"
           onClick={handleGenerateRoute}
-          disabled={loading || !activeLocation}
+          disabled={loading || !activeLocation || !duration}
           style={{ backgroundColor: getVibeColor(selectedVibe) }}
         >
           {loading ? 'Generating...' : '✨ Generate Route'}
