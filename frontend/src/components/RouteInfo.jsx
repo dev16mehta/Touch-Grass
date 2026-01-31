@@ -86,7 +86,36 @@ const renderStars = (rating) => {
 export const RouteInfo = ({ routeData, isCircular }) => {
   if (!routeData) return null
 
-  const places = routeData.waypoints || routeData.places || []
+  const allPlaces = routeData.waypoints || routeData.places || []
+
+  // Filter out hotels, motels, airports (except 5-star world famous hotels)
+  const filteredPlaces = allPlaces.filter(place => {
+    const placeType = (place.type || place.google_type || '').toLowerCase()
+
+    // Excluded types
+    const excludedTypes = [
+      'hotel', 'motel', 'lodging', 'airport',
+      'transit_station', 'bus_station', 'train_station'
+    ]
+
+    // Check if it's an excluded type
+    const isExcluded = excludedTypes.some(type => placeType.includes(type))
+
+    // If it's a hotel, only include if it's 5-star (rating >= 4.5 and highly rated)
+    if (placeType.includes('hotel') || placeType.includes('lodging')) {
+      return (place.rating || 0) >= 4.5 && (place.user_ratings_total || 0) >= 500
+    }
+
+    // Exclude all other excluded types
+    if (isExcluded) {
+      return false
+    }
+
+    return true
+  })
+
+  // Limit to 1-5 places
+  const places = filteredPlaces.slice(0, Math.min(5, Math.max(1, filteredPlaces.length)))
 
   return (
     <div className="route-info">
@@ -115,7 +144,7 @@ export const RouteInfo = ({ routeData, isCircular }) => {
           These spots match your <strong>{routeData.vibe}</strong> vibe
         </p>
         <div className="places-list">
-          {places.slice(0, 8).map((place, index) => (
+          {places.map((place, index) => (
             <div key={place.place_id || index} className="place-card">
               <div className="place-header">
                 <span className="place-name">{place.name}</span>
@@ -141,8 +170,8 @@ export const RouteInfo = ({ routeData, isCircular }) => {
             </div>
           ))}
         </div>
-        {places.length > 8 && (
-          <p className="places-more">+ {places.length - 8} more places considered</p>
+        {filteredPlaces.length > 5 && (
+          <p className="places-more">+ {filteredPlaces.length - 5} more places considered</p>
         )}
       </div>
 

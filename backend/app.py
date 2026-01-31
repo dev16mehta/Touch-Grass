@@ -8,7 +8,7 @@ import google.generativeai as genai
 from config import VIBE_CONFIGS
 from services.ai_service import detect_vibe_from_text, generate_route_description
 from services.google_maps_service import get_google_places, get_google_directions, geocode_location, discover_all_places
-from services.route_service import calculate_route_parameters, optimize_waypoints
+from services.route_service import calculate_route_parameters, optimize_waypoints, find_places_near_route
 from services import place_service
 
 load_dotenv()
@@ -175,8 +175,19 @@ def generate_route():
         if not directions:
             return jsonify({'error': 'Could not generate route. Try a different location or duration.'}), 500
 
+        # Find places that are actually close to the generated route path
+        # This ensures "places along the way" are truly on the path
+        route_coordinates = directions['coordinates']
+        places_on_route = find_places_near_route(route_coordinates, places, max_distance=150)
+
+        # If we found places on route, use those; otherwise fall back to nearby places
+        waypoints_to_display = places_on_route if places_on_route else places[:10]
+
+        # Limit to top 10 places
+        waypoints_to_display = waypoints_to_display[:10]
+
         # Generate AI description
-        description = generate_route_description(gemini_model, vibe, places)
+        description = generate_route_description(gemini_model, vibe, waypoints_to_display)
 
         return jsonify({
             'vibe': vibe,
@@ -187,7 +198,7 @@ def generate_route():
                 'duration': directions['duration'],
                 'polyline': directions['polyline']
             },
-            'waypoints': places[:10],
+            'waypoints': waypoints_to_display,
             'directions': {
                 'steps': directions['steps']
             },

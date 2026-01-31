@@ -3,6 +3,59 @@ from config import VIBE_CONFIGS
 from utils.geo_utils import calculate_distance, calculate_angle
 
 
+def find_places_near_route(route_coordinates, all_places, max_distance=100):
+    """
+    Find places that are close to the actual route path.
+
+    Args:
+        route_coordinates: List of [lon, lat] coordinates forming the route
+        all_places: List of all available places
+        max_distance: Maximum distance in meters from route to consider a place "on path"
+
+    Returns:
+        List of places that are near the route, sorted by relevance
+    """
+    if not route_coordinates or not all_places:
+        return []
+
+    places_with_min_distance = []
+
+    # For each place, find the minimum distance to any point on the route
+    for place in all_places:
+        place_lat = place.get('latitude')
+        place_lon = place.get('longitude')
+
+        if not place_lat or not place_lon:
+            continue
+
+        # Sample route points (every 10th point to reduce computation)
+        sample_interval = max(1, len(route_coordinates) // 50)
+        sampled_coords = route_coordinates[::sample_interval]
+
+        # Find minimum distance to route
+        min_dist = float('inf')
+        closest_route_index = 0
+
+        for i, coord in enumerate(sampled_coords):
+            # coord is [lon, lat], we need (lat, lon) for calculate_distance
+            dist = calculate_distance(place_lat, place_lon, coord[1], coord[0])
+            if dist < min_dist:
+                min_dist = dist
+                closest_route_index = i * sample_interval
+
+        # Only include places within max_distance of the route
+        if min_dist <= max_distance:
+            place_copy = place.copy()
+            place_copy['distance_to_route'] = min_dist
+            place_copy['route_position'] = closest_route_index / len(route_coordinates)  # 0 to 1
+            places_with_min_distance.append(place_copy)
+
+    # Sort by position along route (so places appear in order)
+    places_with_min_distance.sort(key=lambda p: p['route_position'])
+
+    return places_with_min_distance
+
+
 def score_place_for_vibe(place, vibe):
     """
     Simple scoring: if place is in the vibe, score by rating only.
@@ -81,7 +134,7 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
 
     if is_circular:
         # For circular routes, create a LOOP (not out-and-back)
-        # Select 2 waypoints at different angles to create a triangular loop
+        # Use 3 waypoints positioned at ~120 degree intervals to minimize overlap
 
         # Score places - use module-level score_place_for_vibe if vibes available,
         # otherwise fall back to rating-only scoring
@@ -96,33 +149,72 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
         scored_places = [(p, local_score(p)) for p in filtered_places]
         scored_places.sort(key=lambda x: x[1], reverse=True)
 
-        if len(scored_places) >= 2:
-            # Select first waypoint from top 3 vibe-matching places (adds variety)
-            top_candidates = [p for p, score in scored_places[:3] if score > 50]
-            if not top_candidates:
-                top_candidates = [p for p, score in scored_places[:3]]
+        # Try to select 3 waypoints at different angles for better loop coverage
+        if len(scored_places) >= 3:
+            selected_waypoints = []
+            selected_angles = []
 
-            # Use hash of vibe to get consistent but different selection per vibe
+            # Select first waypoint from top candidates
+            top_candidates = [p for p, score in scored_places[:5] if score > 50]
+            if not top_candidates:
+                top_candidates = [p for p, score in scored_places[:5]]
+
             vibe_index = hash(vibe) % len(top_candidates)
             waypoint1 = top_candidates[vibe_index]
+            angle1 = calculate_angle(start_lat, start_lon, waypoint1['latitude'], waypoint1['longitude'])
+            selected_waypoints.append(waypoint1)
+            selected_angles.append(angle1)
 
-            # Second waypoint: pick one at different angle that also matches vibe
-            angle_to_wp1 = calculate_angle(start_lat, start_lon, waypoint1['latitude'], waypoint1['longitude'])
-
-            # Get remaining high-scoring places
-            remaining = [(p, s) for p, s in scored_places if p != waypoint1]
-
+            # Select second waypoint ~120 degrees away from first
+            remaining = [p for p, s in scored_places if p != waypoint1 and s > 0]
             if remaining:
-                # Prefer places that: 1) match vibe well, 2) are at different angle
-                waypoint2 = max(
+                # Find waypoint closest to 120 degrees from first
+                target_angle_2 = (angle1 + 120) % 360
+                waypoint2 = min(
                     remaining,
-                    key=lambda x: (
-                        x[1] * 0.5 +  # Vibe score weight
-                        abs((calculate_angle(start_lat, start_lon, x[0]['latitude'], x[0]['longitude']) - angle_to_wp1 + 180) % 360 - 180) * 0.5  # Angle difference weight
+                    key=lambda p: min(
+                        abs((calculate_angle(start_lat, start_lon, p['latitude'], p['longitude']) - target_angle_2 + 180) % 360 - 180),
+                        360 - abs((calculate_angle(start_lat, start_lon, p['latitude'], p['longitude']) - target_angle_2 + 180) % 360 - 180)
                     )
-                )[0]
+                )
+                angle2 = calculate_angle(start_lat, start_lon, waypoint2['latitude'], waypoint2['longitude'])
+                selected_waypoints.append(waypoint2)
+                selected_angles.append(angle2)
+
+                # Select third waypoint ~120 degrees from second (240 degrees from first)
+                remaining2 = [p for p in remaining if p != waypoint2]
+                if remaining2:
+                    target_angle_3 = (angle1 + 240) % 360
+                    waypoint3 = min(
+                        remaining2,
+                        key=lambda p: min(
+                            abs((calculate_angle(start_lat, start_lon, p['latitude'], p['longitude']) - target_angle_3 + 180) % 360 - 180),
+                            360 - abs((calculate_angle(start_lat, start_lon, p['latitude'], p['longitude']) - target_angle_3 + 180) % 360 - 180)
+                        )
+                    )
+                    selected_waypoints.append(waypoint3)
+
+            # Create loop with 2-3 waypoints
+            if len(selected_waypoints) >= 2:
+                waypoints = [(start_lat, start_lon)]
+                for wp in selected_waypoints:
+                    waypoints.append((wp['latitude'], wp['longitude']))
+                waypoints.append((start_lat, start_lon))
             else:
-                waypoint2 = scored_places[1][0] if len(scored_places) > 1 else waypoint1
+                # Fallback to simple route
+                return create_simple_circular_route(start_lat, start_lon, target_distance)
+
+        elif len(scored_places) >= 2:
+            # Only 2 places available - ensure they're at different angles
+            waypoint1 = scored_places[0][0]
+            angle1 = calculate_angle(start_lat, start_lon, waypoint1['latitude'], waypoint1['longitude'])
+
+            # Find second waypoint with maximum angle difference
+            waypoint2 = max(
+                [p for p, s in scored_places[1:] if s > 0],
+                key=lambda p: abs((calculate_angle(start_lat, start_lon, p['latitude'], p['longitude']) - angle1 + 180) % 360 - 180),
+                default=scored_places[1][0] if len(scored_places) > 1 else waypoint1
+            )
 
             # Create loop: Start → WP1 → WP2 → Start
             waypoints = [
