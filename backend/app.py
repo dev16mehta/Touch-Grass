@@ -8,7 +8,7 @@ import googlemaps
 
 from config import VIBE_CONFIGS
 from services.ai_service import detect_vibe_from_text, generate_route_description
-from services.google_maps_service import get_google_places, get_google_directions
+from services.google_maps_service import get_google_places, get_google_directions, geocode_location
 from services.route_service import calculate_route_parameters, optimize_waypoints
 
 load_dotenv()
@@ -57,7 +57,7 @@ def get_vibes():
 
 @app.route('/api/detect-vibe', methods=['POST'])
 def detect_vibe():
-    """Detect vibe from user's text description using LLM"""
+    """Detect vibe and location from user's text description using LLM"""
     try:
         data = request.json
         user_text = data.get('text', '').strip()
@@ -65,7 +65,24 @@ def detect_vibe():
         if not user_text:
             return jsonify({'error': 'Text description is required'}), 400
 
+        # Detect vibe and extract location name
         result = detect_vibe_from_text(OPENROUTER_API_KEY, user_text)
+
+        # If location was extracted, geocode it
+        if result.get('location'):
+            geocoded = geocode_location(gmaps, result['location'])
+            if geocoded:
+                result['geocoded_location'] = {
+                    'latitude': geocoded['latitude'],
+                    'longitude': geocoded['longitude'],
+                    'formatted_address': geocoded['formatted_address'],
+                    'name': result['location']
+                }
+            else:
+                # Keep the location name even if geocoding fails
+                result['geocoded_location'] = None
+                result['location_error'] = f"Could not find location: {result['location']}"
+
         return jsonify(result)
 
     except ValueError as e:

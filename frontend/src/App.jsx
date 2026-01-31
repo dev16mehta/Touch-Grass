@@ -24,13 +24,15 @@ function App() {
   const [isCircular, setIsCircular] = useState(true)
 
   // Custom hooks
-  const { location, error: locationError } = useLocation()
+  const { location: gpsLocation, error: locationError } = useLocation()
   const {
     moodText,
     setMoodText,
     detectedVibe,
+    detectedLocation,
     detecting,
     detectVibe,
+    clearDetectedLocation,
     error: vibeError
   } = useVibeDetection()
   const {
@@ -41,27 +43,34 @@ function App() {
     setError: setRouteError
   } = useRouteGeneration()
 
+  // Use detected location if available, otherwise use GPS location
+  const activeLocation = detectedLocation || gpsLocation
+
   // Combined error
   const error = locationError || vibeError || routeError
 
   const handleDetectVibe = async () => {
-    const vibe = await detectVibe()
-    if (vibe) {
-      setSelectedVibe(vibe)
+    const result = await detectVibe()
+    if (result.vibe) {
+      setSelectedVibe(result.vibe)
     }
   }
 
+  const handleClearLocation = () => {
+    clearDetectedLocation()
+  }
+
   const handleGenerateRoute = async () => {
-    if (!location) {
+    if (!activeLocation) {
       setRouteError('Location not available')
       return
     }
 
     // Auto-detect vibe if user hasn't detected it yet but has entered text
     if (moodText.trim() && !detectedVibe) {
-      const vibe = await detectVibe()
-      if (vibe) {
-        setSelectedVibe(vibe)
+      const result = await detectVibe()
+      if (result.vibe) {
+        setSelectedVibe(result.vibe)
       }
       // Let user click generate again after vibe is detected
       return
@@ -69,7 +78,7 @@ function App() {
 
     await generateRouteAPI({
       vibe: selectedVibe,
-      location,
+      location: activeLocation,
       duration,
       isCircular
     })
@@ -89,6 +98,8 @@ function App() {
           onDetect={handleDetectVibe}
           detecting={detecting}
           detectedVibe={detectedVibe}
+          detectedLocation={detectedLocation}
+          onClearLocation={handleClearLocation}
         />
 
         <DurationSelector
@@ -104,7 +115,7 @@ function App() {
         <button
           className="generate-button"
           onClick={handleGenerateRoute}
-          disabled={loading || !location}
+          disabled={loading || !activeLocation}
           style={{ backgroundColor: getVibeColor(selectedVibe) }}
         >
           {loading ? 'Generating...' : '✨ Generate Route'}
@@ -124,7 +135,7 @@ function App() {
 
       <div className="map-container">
         <Map
-          location={location}
+          location={activeLocation}
           routeData={routeData}
           selectedVibe={selectedVibe}
         />

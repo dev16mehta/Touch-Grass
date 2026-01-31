@@ -4,7 +4,7 @@ from config import VIBE_CONFIGS
 
 
 def detect_vibe_from_text(openrouter_api_key, user_text):
-    """Detect vibe from user's text description using OpenRouter LLM"""
+    """Detect vibe and location from user's text description using OpenRouter LLM"""
     if not openrouter_api_key:
         raise ValueError('OpenRouter API not configured')
 
@@ -15,16 +15,29 @@ def detect_vibe_from_text(openrouter_api_key, user_text):
         'X-Title': 'Touch Grass'
     }
 
-    prompt = f"""You are a mood classifier for a walking route app. Based on the user's description, classify their mood into ONE of these vibes:
+    prompt = f"""You are a mood and location classifier for a walking route app.
 
-1. "chill" - Relaxing, peaceful, quiet, wanting to unwind, destress, calm, meditative
-2. "date" - Romantic, with partner, coffee date, scenic, intimate, quality time
-3. "chaos" - Party, energetic, nightlife, bars, adventure, wild, exciting
-4. "aesthetic" - Photography, Instagram, beautiful views, artistic, scenic spots, pictures
+Based on the user's description:
+1. Classify their mood into ONE of these vibes: chill, date, chaos, or aesthetic
+2. Extract any location mentioned (city, neighborhood, area name)
+
+Vibes:
+- "chill" - Relaxing, peaceful, quiet, wanting to unwind, destress, calm, meditative
+- "date" - Romantic, with partner, coffee date, scenic, intimate, quality time
+- "chaos" - Party, energetic, nightlife, bars, adventure, wild, exciting
+- "aesthetic" - Photography, Instagram, beautiful views, artistic, scenic spots, pictures
 
 User says: "{user_text}"
 
-Respond with ONLY the vibe name (chill, date, chaos, or aesthetic). Nothing else."""
+Respond in this EXACT format (nothing else):
+vibe: [vibe_name]
+location: [location_name or "none"]
+
+Examples:
+- "I want to relax in Central Park" → vibe: chill, location: Central Park
+- "Date night in Kensington tonight" → vibe: date, location: Kensington
+- "I'm feeling stressed" → vibe: chill, location: none
+- "Party time in Shoreditch!" → vibe: chaos, location: Shoreditch"""
 
     payload = {
         'model': 'openai/gpt-3.5-turbo',
@@ -32,7 +45,7 @@ Respond with ONLY the vibe name (chill, date, chaos, or aesthetic). Nothing else
             {'role': 'user', 'content': prompt}
         ],
         'temperature': 0.3,
-        'max_tokens': 10
+        'max_tokens': 50
     }
 
     response = requests.post(
@@ -47,17 +60,27 @@ Respond with ONLY the vibe name (chill, date, chaos, or aesthetic). Nothing else
         raise Exception('Failed to detect vibe from OpenRouter API')
 
     result = response.json()
-    detected_vibe = result['choices'][0]['message']['content'].strip().lower()
+    llm_response = result['choices'][0]['message']['content'].strip().lower()
 
-    # Validate the detected vibe
-    if detected_vibe not in VIBE_CONFIGS:
-        # Default to chill if invalid
-        detected_vibe = 'chill'
+    # Parse response
+    detected_vibe = 'chill'  # Default
+    detected_location = None
+
+    for line in llm_response.split('\n'):
+        if 'vibe:' in line:
+            vibe = line.split('vibe:')[1].strip()
+            if vibe in VIBE_CONFIGS:
+                detected_vibe = vibe
+        elif 'location:' in line:
+            loc = line.split('location:')[1].strip()
+            if loc and loc != 'none':
+                detected_location = loc
 
     return {
         'vibe': detected_vibe,
         'emoji': VIBE_CONFIGS[detected_vibe]['emoji'],
-        'description': VIBE_CONFIGS[detected_vibe]['description']
+        'description': VIBE_CONFIGS[detected_vibe]['description'],
+        'location': detected_location
     }
 
 
