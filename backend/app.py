@@ -8,8 +8,9 @@ import googlemaps
 
 from config import VIBE_CONFIGS
 from services.ai_service import detect_vibe_from_text, generate_route_description
-from services.google_maps_service import get_google_places, get_google_directions, geocode_location
+from services.google_maps_service import get_google_places, get_google_directions, geocode_location, discover_all_places
 from services.route_service import calculate_route_parameters, optimize_waypoints
+from services import place_service
 
 load_dotenv()
 
@@ -122,12 +123,49 @@ def generate_route():
         route_params = calculate_route_parameters(duration, vibe, is_circular)
         search_radius = route_params['search_radius']
 
-        # Get nearby places
-        places = get_google_places(gmaps, latitude, longitude, vibe, search_radius)
+        # Check if area is already indexed in our database
+        if not place_service.is_area_indexed(latitude, longitude, search_radius):
+            # Discover all places in area
+            raw_places = discover_all_places(gmaps, latitude, longitude, search_radius)
 
-        # If no places found, expand search radius
+            # Categorize each place (static mapping or LLM for unknown types)
+            places_to_save = []
+            for place in raw_places:
+                vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
+                places_to_save.append((place, vibes, source))
+
+            # Bulk save to database
+            if places_to_save:
+                place_service.save_places_bulk(places_to_save)
+
+            # Mark area as indexed
+            place_service.mark_area_indexed(latitude, longitude, search_radius)
+
+        # Query places for the requested vibe from database
+        places = place_service.get_places_by_vibe(latitude, longitude, search_radius, vibe)
+
+        # If no places found in database, expand search radius
         if not places:
-            places = get_google_places(gmaps, latitude, longitude, vibe, min(search_radius * 2, 10000))
+            expanded_radius = min(search_radius * 2, 10000)
+
+            # Check if expanded area needs indexing
+            if not place_service.is_area_indexed(latitude, longitude, expanded_radius):
+                raw_places = discover_all_places(gmaps, latitude, longitude, expanded_radius)
+                places_to_save = []
+                for place in raw_places:
+                    vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
+                    places_to_save.append((place, vibes, source))
+                if places_to_save:
+                    place_service.save_places_bulk(places_to_save)
+                place_service.mark_area_indexed(latitude, longitude, expanded_radius)
+
+            places = place_service.get_places_by_vibe(latitude, longitude, expanded_radius, vibe)
+
+        # Fallback to legacy method if still no places
+        if not places:
+            places = get_google_places(gmaps, latitude, longitude, vibe, search_radius)
+            if not places:
+                places = get_google_places(gmaps, latitude, longitude, vibe, min(search_radius * 2, 10000))
 
         # Optimize waypoints
         waypoints = optimize_waypoints(

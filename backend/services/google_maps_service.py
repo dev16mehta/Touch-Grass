@@ -1,6 +1,6 @@
 """Google Maps API integration"""
 import googlemaps
-from config import VIBE_CONFIGS
+from config import VIBE_CONFIGS, ALL_DISCOVERABLE_TYPES
 from utils.geo_utils import calculate_distance
 
 
@@ -147,3 +147,59 @@ def get_google_directions(gmaps_client, waypoints):
     except Exception as e:
         print(f"Directions error: {e}")
         return None
+
+
+def discover_all_places(gmaps_client, lat, lon, radius):
+    """
+    Fetch ALL place types in the area.
+    Returns list of unique places (deduped by place_id).
+
+    Args:
+        gmaps_client: Google Maps client instance
+        lat: Center latitude
+        lon: Center longitude
+        radius: Search radius in meters
+
+    Returns:
+        List of place dictionaries with deduplication by place_id
+    """
+    if not gmaps_client:
+        return []
+
+    seen_ids = set()
+    all_places = []
+
+    for place_type in ALL_DISCOVERABLE_TYPES:
+        try:
+            results = gmaps_client.places_nearby(
+                location=(lat, lon),
+                radius=radius,
+                type=place_type
+            )
+
+            for place in results.get('results', []):
+                place_id = place['place_id']
+
+                # Skip if already seen
+                if place_id in seen_ids:
+                    continue
+
+                seen_ids.add(place_id)
+                location = place['geometry']['location']
+
+                all_places.append({
+                    'place_id': place_id,
+                    'name': place.get('name'),
+                    'google_type': place_type,
+                    'latitude': location['lat'],
+                    'longitude': location['lng'],
+                    'rating': place.get('rating', 0),
+                    'user_ratings_total': place.get('user_ratings_total', 0),
+                    'address': place.get('vicinity', '')
+                })
+
+        except Exception as e:
+            print(f"Error fetching places of type {place_type}: {e}")
+            continue
+
+    return all_places

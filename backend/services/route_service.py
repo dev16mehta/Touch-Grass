@@ -3,6 +3,27 @@ from config import VIBE_CONFIGS
 from utils.geo_utils import calculate_distance, calculate_angle
 
 
+def score_place_for_vibe(place, vibe):
+    """
+    Simple scoring: if place is in the vibe, score by rating only.
+    All places in the vibe are treated equally (no vibe weighting).
+
+    Args:
+        place: Place dictionary with 'vibes' and 'rating' keys
+        vibe: Target vibe string
+
+    Returns:
+        Score (float) - 0 if place doesn't belong to vibe
+    """
+    # Check if place belongs to this vibe
+    place_vibes = place.get('vibes', [])
+    if vibe not in place_vibes:
+        return 0
+
+    # Score purely by rating (all vibe members are equal)
+    return (place.get('rating') or 3.0) * 10
+
+
 def calculate_route_parameters(duration_minutes, vibe, is_circular):
     """Calculate target distance and search radius based on duration"""
     vibe_config = VIBE_CONFIGS[vibe]
@@ -27,7 +48,11 @@ def calculate_route_parameters(duration_minutes, vibe, is_circular):
 
 
 def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_circular):
-    """Select optimal waypoints based on route type"""
+    """Select optimal waypoints based on route type.
+
+    Places should already be filtered to the requested vibe (from place_service).
+    Scoring is based purely on rating since all places in the vibe are equal.
+    """
     if not places:
         return create_simple_circular_route(start_lat, start_lon, target_distance)
 
@@ -57,24 +82,18 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
     if is_circular:
         # For circular routes, create a LOOP (not out-and-back)
         # Select 2 waypoints at different angles to create a triangular loop
-        vibe_config = VIBE_CONFIGS.get(vibe, {})
-        preferred_types = vibe_config.get('google_types', [])
 
-        # Score places based on vibe match - prefer primary vibe types
-        def score_place_for_vibe(place):
-            place_type = place['type']
-            # Primary types get highest score (100)
-            if preferred_types and place_type == preferred_types[0]:
-                return 100 + place['rating'] * 10
-            # Secondary types get medium score (50)
-            elif place_type in preferred_types:
-                return 50 + place['rating'] * 10
-            # Other types get low score
-            else:
-                return place['rating'] * 10
+        # Score places - use module-level score_place_for_vibe if vibes available,
+        # otherwise fall back to rating-only scoring
+        def local_score(place):
+            # If place has vibes list (from place_service), use vibe-aware scoring
+            if 'vibes' in place and place['vibes']:
+                return score_place_for_vibe(place, vibe)
+            # Fallback for legacy places without vibes
+            return (place.get('rating') or 3.0) * 10
 
-        # Score and sort places by vibe preference
-        scored_places = [(p, score_place_for_vibe(p)) for p in filtered_places]
+        # Score and sort places by rating (all in vibe are equal)
+        scored_places = [(p, local_score(p)) for p in filtered_places]
         scored_places.sort(key=lambda x: x[1], reverse=True)
 
         if len(scored_places) >= 2:
@@ -125,25 +144,19 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
             return create_simple_circular_route(start_lat, start_lon, target_distance)
 
     else:
-        # One-way: select endpoint and waypoints based on vibe preferences
-        vibe_config = VIBE_CONFIGS.get(vibe, {})
-        preferred_types = vibe_config.get('google_types', [])
+        # One-way: select endpoint and waypoints based on rating
+        # (places are already filtered to the requested vibe)
 
-        # Score places based on vibe match
-        def score_place_for_vibe(place):
-            place_type = place['type']
-            # Primary types get highest score (100)
-            if preferred_types and place_type == preferred_types[0]:
-                return 100 + place['rating'] * 10
-            # Secondary types get medium score (50)
-            elif place_type in preferred_types:
-                return 50 + place['rating'] * 10
-            # Other types get low score
-            else:
-                return place['rating'] * 10
+        # Score places - use rating-based scoring
+        def local_score(place):
+            # If place has vibes list (from place_service), use vibe-aware scoring
+            if 'vibes' in place and place['vibes']:
+                return score_place_for_vibe(place, vibe)
+            # Fallback for legacy places without vibes
+            return (place.get('rating') or 3.0) * 10
 
-        # Score and sort places by vibe preference
-        scored_places = [(p, score_place_for_vibe(p)) for p in filtered_places]
+        # Score and sort places by rating
+        scored_places = [(p, local_score(p)) for p in filtered_places]
         scored_places.sort(key=lambda x: x[1], reverse=True)
 
         # Endpoint should be ~20% of target distance
