@@ -9,7 +9,7 @@ export const useRouteGeneration = () => {
   const [routeData, setRouteData] = useState(null)
   const [error, setError] = useState(null)
 
-  const generateRoute = async ({ vibe, location, duration, isCircular }) => {
+  const generateRoute = async ({ vibe, location, destination, duration, isCircular }) => {
     if (!location) {
       setError('Location not available')
       return
@@ -23,6 +23,7 @@ export const useRouteGeneration = () => {
         vibe,
         latitude: location.latitude,
         longitude: location.longitude,
+        destination,
         duration,
         circular: isCircular
       })

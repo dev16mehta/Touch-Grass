@@ -4,9 +4,13 @@
 import { useState } from 'react'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import './App.css'
+import { Leaf, Sprout } from 'lucide-react'
 
-import { Map, MoodSelector, DurationSelector, RouteTypeSelector, RouteInfo, PlacesPopup } from './components'
+import { Map, MoodSelector, DurationSelector, RouteTypeSelector, DestinationSelector, RouteInfo, PlacesPopup } from './components'
 import { useLocation, useVibeDetection, useRouteGeneration } from './hooks'
+import axios from 'axios'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
 
 const getVibeColor = (vibe) => {
   const colors = {
@@ -22,6 +26,9 @@ function App() {
   const [selectedVibe, setSelectedVibe] = useState('chill')
   const [duration, setDuration] = useState('')
   const [isCircular, setIsCircular] = useState(true)
+  const [destination, setDestination] = useState('')
+  const [geocodedDestination, setGeocodedDestination] = useState(null)
+  const [geocoding, setGeocoding] = useState(false)
 
   // Custom hooks
   const { location: gpsLocation, error: locationError } = useLocation()
@@ -60,9 +67,37 @@ function App() {
     clearDetectedLocation()
   }
 
+  const handleGeocodeDestination = async (destText) => {
+    setGeocoding(true)
+    try {
+      const response = await axios.post(`${API_URL}/geocode`, {
+        location: destText
+      })
+      if (response.data.geocoded_location) {
+        setGeocodedDestination(response.data.geocoded_location)
+      }
+    } catch (err) {
+      console.error('Failed to geocode destination:', err)
+      setRouteError('Could not find destination. Please try a different address.')
+    } finally {
+      setGeocoding(false)
+    }
+  }
+
+  const handleClearDestination = () => {
+    setDestination('')
+    setGeocodedDestination(null)
+  }
+
   const handleGenerateRoute = async () => {
     if (!activeLocation) {
       setRouteError('Location not available')
+      return
+    }
+
+    // For one-way routes, require a destination
+    if (!isCircular && !geocodedDestination) {
+      setRouteError('Please enter a destination for your one-way route')
       return
     }
 
@@ -79,6 +114,7 @@ function App() {
     await generateRouteAPI({
       vibe: selectedVibe,
       location: activeLocation,
+      destination: geocodedDestination,
       duration,
       isCircular
     })
@@ -88,7 +124,7 @@ function App() {
     <div className="app">
       <div className="sidebar">
         <div className="header">
-          <h1>🌿 Touch Grass</h1>
+          <h1><Leaf className="header-icon" /> Touch Grass</h1>
           <p className="tagline">Mood-Based Walking Routes</p>
         </div>
 
@@ -112,13 +148,34 @@ function App() {
           onToggle={setIsCircular}
         />
 
+        {!isCircular && (
+          <DestinationSelector
+            destination={destination}
+            onDestinationChange={setDestination}
+            onGeocode={handleGeocodeDestination}
+            geocoding={geocoding}
+            geocodedDest={geocodedDestination}
+            onClearDest={handleClearDestination}
+          />
+        )}
+
         <button
           className="generate-button"
           onClick={handleGenerateRoute}
           disabled={loading || !activeLocation || !duration}
           style={{ backgroundColor: getVibeColor(selectedVibe) }}
         >
-          {loading ? 'Generating...' : '✨ Generate Route'}
+          {loading ? (
+            <>
+              <Sprout className="button-icon growing" />
+              Growing your path...
+            </>
+          ) : (
+            <>
+              <Leaf className="button-icon" />
+              Start Exploring
+            </>
+          )}
         </button>
 
         {error && (
