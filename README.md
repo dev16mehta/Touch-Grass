@@ -46,25 +46,6 @@ Touch Grass is a mood-based walking route generator that uses AI to understand h
 - Lucide React (icons)
 - CSS3 with animations
 
-## Project Structure
-
-```
-Touch-Grass/
-├── backend/
-│   ├── app.py              # Flask API server
-│   ├── requirements.txt    # Python dependencies
-│   ├── .env               # API keys (not in git)
-│   └── venv/              # Virtual environment
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx        # Main React component
-│   │   ├── App.css        # Styles
-│   │   └── index.css      # Global styles
-│   ├── .env               # Frontend config (not in git)
-│   └── package.json       # Node dependencies
-└── README.md
-```
-
 ## Quick Start
 
 ### Prerequisites
@@ -165,31 +146,3 @@ Touch-Grass/
 │   └── package.json
 └── README.md
 ```
-
-## Building for Production
-
-**Frontend:**
-```bash
-cd frontend
-npm run build
-```
-
-**Backend:**
-Use a production WSGI server like Gunicorn:
-```bash
-pip install gunicorn
-gunicorn app:app
-```
-
-## Future Enhancements
-
-- Social features (share routes, see popular routes)
-- Route history and favorites
-- Weather integration (covered paths when raining)
-- Accessibility options (wheelchair-friendly routes)
-- Gamification (badges, streaks)
-- Multi-day route planning
-
----
-
-**Built with ❤️ for a hackathon** - Stop doomscrolling, start exploring! 🌿
