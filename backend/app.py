@@ -131,9 +131,18 @@ def generate_route():
         vibe = data.get('vibe', 'chill')
         latitude = data.get('latitude')
         longitude = data.get('longitude')
-        duration = data.get('duration', 30)
         is_circular = data.get('circular', True)
         destination = data.get('destination')  # For one-way routes
+
+        # Handle duration - required for circular routes, optional for one-way
+        duration = data.get('duration')
+        if duration is not None:
+            try:
+                duration = int(duration)
+            except (ValueError, TypeError):
+                duration = 30  # Default if invalid
+        else:
+            duration = 30  # Default duration
 
         # Validate inputs
         if not latitude or not longitude:
@@ -149,7 +158,8 @@ def generate_route():
         if not GOOGLE_MAPS_API_KEY:
             return jsonify({'error': 'Google Maps API not configured'}), 500
 
-        if duration < 10 or duration > 120:
+        # Only validate duration for circular routes
+        if is_circular and (duration < 10 or duration > 120):
             return jsonify({'error': 'Duration must be between 10 and 120 minutes'}), 400
 
         # Calculate route parameters
