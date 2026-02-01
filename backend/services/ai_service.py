@@ -1,6 +1,8 @@
 """AI service for LLM integrations (OpenRouter and Gemini)"""
 import requests
-from config import VIBE_CONFIGS
+import json
+import os
+from config import VIBE_CONFIGS, VALID_VIBES
 
 
 def detect_vibe_from_text(openrouter_api_key, user_text):
@@ -103,3 +105,72 @@ def generate_route_description(gemini_model, vibe, places):
     except Exception as e:
         print(f"Gemini API error: {e}")
         return vibe_config['description']
+
+
+def categorize_place_with_llm(openrouter_api_key, place_name, place_type):
+    """
+    Use LLM to categorize a place that doesn't match predefined types.
+    Returns list of vibes: ['chill', 'aesthetic'] etc.
+    """
+    if not openrouter_api_key:
+        # Fallback: return empty vibes if no API key
+        return []
+
+    headers = {
+        'Authorization': f'Bearer {openrouter_api_key}',
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:5001',
+        'X-Title': 'Touch Grass'
+    }
+
+    prompt = f"""Categorize this place for a walking route app.
+Place: {place_name}
+Google type: {place_type}
+
+Available vibes:
+- chill: peaceful, quiet, relaxing (parks, gardens, libraries)
+- date: romantic, intimate, scenic (cafes, restaurants, viewpoints)
+- chaos: energetic, nightlife, lively (bars, clubs, pubs)
+- aesthetic: beautiful, photogenic, cultural (landmarks, museums, historic sites)
+
+A place can belong to multiple vibes if applicable.
+Return ONLY a JSON array of vibes, e.g. ["chill", "aesthetic"]
+Do not include any other text, explanation, or formatting."""
+
+    payload = {
+        'model': 'openai/gpt-3.5-turbo',
+        'messages': [
+            {'role': 'user', 'content': prompt}
+        ],
+        'temperature': 0.3,
+        'max_tokens': 50
+    }
+
+    try:
+        response = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=10
+        )
+
+        if response.status_code != 200:
+            print(f"OpenRouter API error for place categorization: {response.text}")
+            return []
+
+        result = response.json()
+        llm_response = result['choices'][0]['message']['content'].strip()
+
+        # Parse JSON array from response
+        vibes = json.loads(llm_response)
+
+        # Validate vibes are from our valid set
+        valid_vibes = [v for v in vibes if v in VALID_VIBES]
+        return valid_vibes
+
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse LLM response as JSON: {e}")
+        return []
+    except Exception as e:
+        print(f"Error categorizing place with LLM: {e}")
+        return []

@@ -4,12 +4,12 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-import googlemaps
 
 from config import VIBE_CONFIGS
 from services.ai_service import detect_vibe_from_text, generate_route_description
-from services.google_maps_service import get_google_places, get_google_directions, geocode_location
-from services.route_service import calculate_route_parameters, optimize_waypoints
+from services.google_maps_service import get_google_places, get_google_directions, geocode_location, discover_all_places
+from services.route_service import calculate_route_parameters, optimize_waypoints, find_places_near_route
+from services import place_service
 
 load_dotenv()
 
@@ -20,11 +20,8 @@ CORS(app)
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 gemini_model = genai.GenerativeModel('gemini-pro')
 
-# Configure Google Maps
-GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
-gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY) if GOOGLE_MAPS_API_KEY else None
-
 # API Keys
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
 
@@ -33,7 +30,7 @@ def health():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'google_maps_configured': gmaps is not None,
+        'google_maps_configured': GOOGLE_MAPS_API_KEY is not None,
         'gemini_configured': os.getenv('GEMINI_API_KEY') is not None,
         'openrouter_configured': OPENROUTER_API_KEY is not None
     })
@@ -70,7 +67,7 @@ def detect_vibe():
 
         # If location was extracted, geocode it
         if result.get('location'):
-            geocoded = geocode_location(gmaps, result['location'])
+            geocoded = geocode_location(GOOGLE_MAPS_API_KEY, result['location'])
             if geocoded:
                 result['geocoded_location'] = {
                     'latitude': geocoded['latitude'],
@@ -112,7 +109,7 @@ def generate_route():
         if vibe not in VIBE_CONFIGS:
             return jsonify({'error': f'Invalid vibe. Choose from: {list(VIBE_CONFIGS.keys())}'}), 400
 
-        if not gmaps:
+        if not GOOGLE_MAPS_API_KEY:
             return jsonify({'error': 'Google Maps API not configured'}), 500
 
         if duration < 10 or duration > 120:
@@ -122,12 +119,49 @@ def generate_route():
         route_params = calculate_route_parameters(duration, vibe, is_circular)
         search_radius = route_params['search_radius']
 
-        # Get nearby places
-        places = get_google_places(gmaps, latitude, longitude, vibe, search_radius)
+        # Check if area is already indexed in our database
+        if not place_service.is_area_indexed(latitude, longitude, search_radius):
+            # Discover all places in area
+            raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, latitude, longitude, search_radius)
 
-        # If no places found, expand search radius
+            # Categorize each place (static mapping or LLM for unknown types)
+            places_to_save = []
+            for place in raw_places:
+                vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
+                places_to_save.append((place, vibes, source))
+
+            # Bulk save to database
+            if places_to_save:
+                place_service.save_places_bulk(places_to_save)
+
+            # Mark area as indexed
+            place_service.mark_area_indexed(latitude, longitude, search_radius)
+
+        # Query places for the requested vibe from database
+        places = place_service.get_places_by_vibe(latitude, longitude, search_radius, vibe)
+
+        # If no places found in database, expand search radius
         if not places:
-            places = get_google_places(gmaps, latitude, longitude, vibe, min(search_radius * 2, 10000))
+            expanded_radius = min(search_radius * 2, 10000)
+
+            # Check if expanded area needs indexing
+            if not place_service.is_area_indexed(latitude, longitude, expanded_radius):
+                raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, latitude, longitude, expanded_radius)
+                places_to_save = []
+                for place in raw_places:
+                    vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
+                    places_to_save.append((place, vibes, source))
+                if places_to_save:
+                    place_service.save_places_bulk(places_to_save)
+                place_service.mark_area_indexed(latitude, longitude, expanded_radius)
+
+            places = place_service.get_places_by_vibe(latitude, longitude, expanded_radius, vibe)
+
+        # Fallback to direct API call if still no places
+        if not places:
+            places = get_google_places(GOOGLE_MAPS_API_KEY, latitude, longitude, vibe, search_radius)
+            if not places:
+                places = get_google_places(GOOGLE_MAPS_API_KEY, latitude, longitude, vibe, min(search_radius * 2, 10000))
 
         # Optimize waypoints
         waypoints = optimize_waypoints(
@@ -136,13 +170,24 @@ def generate_route():
         )
 
         # Get directions
-        directions = get_google_directions(gmaps, waypoints)
+        directions = get_google_directions(GOOGLE_MAPS_API_KEY, waypoints)
 
         if not directions:
             return jsonify({'error': 'Could not generate route. Try a different location or duration.'}), 500
 
+        # Find places that are actually close to the generated route path
+        # This ensures "places along the way" are truly on the path
+        route_coordinates = directions['coordinates']
+        places_on_route = find_places_near_route(route_coordinates, places, max_distance=150)
+
+        # If we found places on route, use those; otherwise fall back to nearby places
+        waypoints_to_display = places_on_route if places_on_route else places[:10]
+
+        # Limit to top 10 places
+        waypoints_to_display = waypoints_to_display[:10]
+
         # Generate AI description
-        description = generate_route_description(gemini_model, vibe, places)
+        description = generate_route_description(gemini_model, vibe, waypoints_to_display)
 
         return jsonify({
             'vibe': vibe,
@@ -153,7 +198,7 @@ def generate_route():
                 'duration': directions['duration'],
                 'polyline': directions['polyline']
             },
-            'waypoints': places[:10],
+            'waypoints': waypoints_to_display,
             'directions': {
                 'steps': directions['steps']
             },

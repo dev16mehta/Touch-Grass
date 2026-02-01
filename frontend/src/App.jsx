@@ -5,7 +5,7 @@ import { useState } from 'react'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import './App.css'
 
-import { Map, MoodSelector, DurationSelector, RouteTypeSelector, RouteInfo } from './components'
+import { Map, MoodSelector, DurationSelector, RouteTypeSelector, RouteInfo, PlacesPopup } from './components'
 import { useLocation, useVibeDetection, useRouteGeneration } from './hooks'
 
 const getVibeColor = (vibe) => {
@@ -20,7 +20,7 @@ const getVibeColor = (vibe) => {
 
 function App() {
   const [selectedVibe, setSelectedVibe] = useState('chill')
-  const [duration, setDuration] = useState(30)
+  const [duration, setDuration] = useState('')
   const [isCircular, setIsCircular] = useState(true)
 
   // Custom hooks
@@ -115,7 +115,7 @@ function App() {
         <button
           className="generate-button"
           onClick={handleGenerateRoute}
-          disabled={loading || !activeLocation}
+          disabled={loading || !activeLocation || !duration}
           style={{ backgroundColor: getVibeColor(selectedVibe) }}
         >
           {loading ? 'Generating...' : '✨ Generate Route'}
@@ -139,6 +139,7 @@ function App() {
           routeData={routeData}
           selectedVibe={selectedVibe}
         />
+        <PlacesPopup routeData={routeData} />
       </div>
     </div>
   )

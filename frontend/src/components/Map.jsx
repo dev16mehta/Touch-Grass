@@ -47,6 +47,9 @@ export const Map = ({ location, routeData, selectedVibe }) => {
     if (map.current.getLayer('route')) {
       map.current.removeLayer('route')
     }
+    if (map.current.getLayer('route-outline')) {
+      map.current.removeLayer('route-outline')
+    }
     if (map.current.getSource('route')) {
       map.current.removeSource('route')
     }
@@ -70,6 +73,24 @@ export const Map = ({ location, routeData, selectedVibe }) => {
       }
     })
 
+    // Add shadow/outline layer first (bottom layer)
+    map.current.addLayer({
+      id: 'route-outline',
+      type: 'line',
+      source: 'route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#000000',
+        'line-width': 10,
+        'line-opacity': 0.3,
+        'line-blur': 4
+      }
+    })
+
+    // Add main route layer on top
     map.current.addLayer({
       id: 'route',
       type: 'line',
@@ -80,8 +101,8 @@ export const Map = ({ location, routeData, selectedVibe }) => {
       },
       paint: {
         'line-color': getVibeColor(selectedVibe),
-        'line-width': 4,
-        'line-opacity': 0.8
+        'line-width': 6,
+        'line-opacity': 0.95
       }
     })
 

@@ -1,26 +1,45 @@
-"""Google Maps API integration"""
-import googlemaps
-from config import VIBE_CONFIGS
+"""Google Maps API integration using Places API (New) and Routes API"""
+import requests
+import os
+from config import VIBE_CONFIGS, ALL_DISCOVERABLE_TYPES
 from utils.geo_utils import calculate_distance
 
+# Get API key from environment
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY')
 
-def geocode_location(gmaps_client, location_name):
+# API endpoints
+PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
+GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
+
+
+def geocode_location(api_key, location_name):
     """
-    Geocode a location name to coordinates
-    Returns dict with latitude, longitude, and formatted_address, or None if not found
+    Geocode a location name to coordinates using Geocoding API.
+    Returns dict with latitude, longitude, and formatted_address, or None if not found.
     """
-    if not gmaps_client or not location_name:
+    if not api_key or not location_name:
         return None
 
     try:
-        # Add country bias for better results (can be made configurable)
-        geocode_result = gmaps_client.geocode(location_name)
+        response = requests.get(
+            GEOCODE_URL,
+            params={
+                'address': location_name,
+                'key': api_key
+            },
+            timeout=10
+        )
 
-        if not geocode_result:
-            print(f"Geocoding: No results found for '{location_name}'")
+        data = response.json()
+
+        if data.get('status') != 'OK' or not data.get('results'):
+            print(f"Geocoding: No results for '{location_name}' - Status: {data.get('status')}")
+            if data.get('error_message'):
+                print(f"Error: {data.get('error_message')}")
             return None
 
-        result = geocode_result[0]
+        result = data['results'][0]
         location = result['geometry']['location']
 
         return {
@@ -32,103 +51,213 @@ def geocode_location(gmaps_client, location_name):
 
     except Exception as e:
         print(f"Geocoding error for '{location_name}': {e}")
-        # Check if it's an API permission error
-        if 'REQUEST_DENIED' in str(e):
-            print("ERROR: Geocoding API not enabled. Please enable it in Google Cloud Console.")
         return None
 
 
-def get_google_places(gmaps_client, lat, lon, vibe, radius):
-    """Fetch nearby places using Google Places API"""
-    if not gmaps_client:
+def search_nearby_places(api_key, lat, lon, radius, included_types):
+    """
+    Search for nearby places using Places API (New).
+
+    Args:
+        api_key: Google Maps API key
+        lat: Center latitude
+        lon: Center longitude
+        radius: Search radius in meters
+        included_types: List of place types to search for
+
+    Returns:
+        List of place dictionaries
+    """
+    if not api_key:
+        return []
+
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': api_key,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.rating,places.userRatingCount,places.formattedAddress,places.types,places.primaryType'
+    }
+
+    body = {
+        'includedTypes': included_types,
+        'maxResultCount': 20,
+        'locationRestriction': {
+            'circle': {
+                'center': {
+                    'latitude': lat,
+                    'longitude': lon
+                },
+                'radius': min(radius, 50000)  # Max 50km
+            }
+        }
+    }
+
+    try:
+        response = requests.post(
+            PLACES_NEARBY_URL,
+            headers=headers,
+            json=body,
+            timeout=15
+        )
+
+        if response.status_code != 200:
+            print(f"Places API error: {response.status_code} - {response.text}")
+            return []
+
+        data = response.json()
+        places = []
+
+        for place in data.get('places', []):
+            location = place.get('location', {})
+            places.append({
+                'place_id': place.get('id'),
+                'name': place.get('displayName', {}).get('text', 'Unknown'),
+                'latitude': location.get('latitude'),
+                'longitude': location.get('longitude'),
+                'rating': place.get('rating', 0),
+                'user_ratings_total': place.get('userRatingCount', 0),
+                'address': place.get('formattedAddress', ''),
+                'google_type': place.get('primaryType', included_types[0] if included_types else 'unknown'),
+                'types': place.get('types', [])
+            })
+
+        return places
+
+    except Exception as e:
+        print(f"Error searching nearby places: {e}")
+        return []
+
+
+def get_google_places(api_key, lat, lon, vibe, radius):
+    """Fetch nearby places for a specific vibe using Places API (New)."""
+    if not api_key:
         return []
 
     vibe_config = VIBE_CONFIGS[vibe]
     google_types = vibe_config.get('google_types', [])
 
-    all_places = []
+    if not google_types:
+        return []
 
-    for place_type in google_types:
-        try:
-            results = gmaps_client.places_nearby(
-                location=(lat, lon),
-                radius=radius,
-                type=place_type
-            )
+    # Search for all vibe types at once
+    all_places = search_nearby_places(api_key, lat, lon, radius, google_types)
 
-            for place in results.get('results', [])[:5]:  # Top 5 per type
-                # Filter: must have rating >= 3.5 or be park/natural feature
-                rating = place.get('rating', 0)
-                if rating >= 3.5 or place_type in ['park', 'natural_feature']:
-                    location = place['geometry']['location']
-                    distance = calculate_distance(lat, lon, location['lat'], location['lng'])
-                    all_places.append({
-                        'name': place.get('name'),
-                        'type': place_type,
-                        'latitude': location['lat'],
-                        'longitude': location['lng'],
-                        'rating': rating,
-                        'user_ratings_total': place.get('user_ratings_total', 0),
-                        'address': place.get('vicinity', ''),
-                        'place_id': place.get('place_id'),
-                        'distance': distance
-                    })
-        except Exception as e:
-            print(f"Error fetching {place_type}: {e}")
-            continue
+    # Calculate distance and filter
+    result_places = []
+    for place in all_places:
+        if place['latitude'] and place['longitude']:
+            distance = calculate_distance(lat, lon, place['latitude'], place['longitude'])
+            rating = place.get('rating', 0)
+
+            # Filter: must have rating >= 3.5 or be park
+            if rating >= 3.5 or place.get('google_type') in ['park']:
+                place['distance'] = distance
+                place['type'] = place.get('google_type')
+                result_places.append(place)
 
     # Sort by combination of rating and proximity
-    all_places.sort(
-        key=lambda x: (x['rating'] * 0.7 + (5000 - min(x['distance'], 5000)) / 5000 * 0.3),
+    result_places.sort(
+        key=lambda x: (x.get('rating', 0) * 0.7 + (5000 - min(x.get('distance', 5000), 5000)) / 5000 * 0.3),
         reverse=True
     )
 
-    return all_places[:20]  # Return top 20
+    return result_places[:20]
 
 
-def get_google_directions(gmaps_client, waypoints):
-    """Get walking route from Google Directions API"""
-    if not gmaps_client or len(waypoints) < 2:
+def discover_all_places(api_key, lat, lon, radius):
+    """
+    Fetch ALL place types in the area using Places API (New).
+    Returns list of unique places (deduped by place_id).
+    """
+    if not api_key:
+        print("No API key provided for discover_all_places")
+        return []
+
+    seen_ids = set()
+    all_places = []
+
+    # Batch types into groups to reduce API calls (max 50 types per request)
+    batch_size = 50
+    type_batches = [ALL_DISCOVERABLE_TYPES[i:i+batch_size] for i in range(0, len(ALL_DISCOVERABLE_TYPES), batch_size)]
+
+    for type_batch in type_batches:
+        try:
+            places = search_nearby_places(api_key, lat, lon, radius, type_batch)
+
+            for place in places:
+                place_id = place.get('place_id')
+                if not place_id or place_id in seen_ids:
+                    continue
+
+                seen_ids.add(place_id)
+
+                # Calculate distance
+                if place.get('latitude') and place.get('longitude'):
+                    place['distance'] = calculate_distance(lat, lon, place['latitude'], place['longitude'])
+
+                all_places.append(place)
+
+        except Exception as e:
+            print(f"Error fetching places batch: {e}")
+            continue
+
+    print(f"Discovered {len(all_places)} unique places")
+    return all_places
+
+
+def get_google_directions(api_key, waypoints):
+    """Get walking route using Directions API."""
+    if not api_key or len(waypoints) < 2:
         return None
 
     origin = waypoints[0]
     destination = waypoints[-1]
-    intermediate = waypoints[1:-1] if len(waypoints) > 2 else None
+    intermediates = waypoints[1:-1] if len(waypoints) > 2 else []
+
+    params = {
+        'origin': f'{origin[0]},{origin[1]}',
+        'destination': f'{destination[0]},{destination[1]}',
+        'mode': 'walking',
+        'units': 'metric',
+        'key': api_key
+    }
+
+    # Add waypoints if any
+    if intermediates:
+        waypoints_str = '|'.join([f'{wp[0]},{wp[1]}' for wp in intermediates])
+        params['waypoints'] = waypoints_str
 
     try:
-        directions_result = gmaps_client.directions(
-            origin=origin,
-            destination=destination,
-            waypoints=intermediate,
-            mode="walking",
-            units="metric",
-            alternatives=False
-        )
+        response = requests.get(DIRECTIONS_URL, params=params, timeout=15)
+        data = response.json()
 
-        if not directions_result:
+        if data.get('status') != 'OK':
+            print(f"Directions API error: {data.get('status')} - {data.get('error_message', '')}")
             return None
 
-        route = directions_result[0]
+        if not data.get('routes'):
+            print("No routes returned")
+            return None
+
+        route = data['routes'][0]
         leg_data = route['legs']
 
-        # Extract route coordinates from polylines
-        coordinates = []
-        for leg in leg_data:
-            for step in leg['steps']:
-                # Decode polyline - Google returns it as an encoded string
-                polyline_points = googlemaps.convert.decode_polyline(step['polyline']['points'])
-                coordinates.extend([[point['lng'], point['lat']] for point in polyline_points])
+        # Decode polyline to coordinates
+        encoded_polyline = route.get('overview_polyline', {}).get('points', '')
+        coordinates = decode_polyline(encoded_polyline)
 
         # Calculate totals
         total_distance = sum(leg['distance']['value'] for leg in leg_data)
-        total_duration = sum(leg['duration']['value'] for leg in leg_data) // 60  # Convert to minutes
+        total_duration = sum(leg['duration']['value'] for leg in leg_data) // 60
 
-        # Extract turn-by-turn steps
+        # Extract steps
         steps = []
         for leg in leg_data:
             for step in leg['steps']:
-                # Clean HTML tags from instructions
-                instruction = step['html_instructions'].replace('<b>', '').replace('</b>', '').replace('<div style="font-size:0.9em">', ' - ').replace('</div>', '')
+                instruction = step.get('html_instructions', 'Continue')
+                # Clean HTML tags
+                instruction = instruction.replace('<b>', '').replace('</b>', '')
+                instruction = instruction.replace('<div style="font-size:0.9em">', ' - ').replace('</div>', '')
+
                 steps.append({
                     'instruction': instruction,
                     'distance': step['distance']['value'],
@@ -141,9 +270,51 @@ def get_google_directions(gmaps_client, waypoints):
             'distance': total_distance,
             'duration': total_duration,
             'steps': steps,
-            'polyline': route['overview_polyline']['points']
+            'polyline': encoded_polyline
         }
 
     except Exception as e:
         print(f"Directions error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
+
+
+def decode_polyline(encoded):
+    """Decode a Google encoded polyline string into a list of [lng, lat] coordinates."""
+    if not encoded:
+        return []
+
+    decoded = []
+    index = 0
+    lat = 0
+    lng = 0
+
+    while index < len(encoded):
+        # Decode latitude
+        shift = 0
+        result = 0
+        while True:
+            b = ord(encoded[index]) - 63
+            index += 1
+            result |= (b & 0x1f) << shift
+            shift += 5
+            if b < 0x20:
+                break
+        lat += (~(result >> 1) if result & 1 else result >> 1)
+
+        # Decode longitude
+        shift = 0
+        result = 0
+        while True:
+            b = ord(encoded[index]) - 63
+            index += 1
+            result |= (b & 0x1f) << shift
+            shift += 5
+            if b < 0x20:
+                break
+        lng += (~(result >> 1) if result & 1 else result >> 1)
+
+        decoded.append([lng / 1e5, lat / 1e5])
+
+    return decoded
