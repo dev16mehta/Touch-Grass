@@ -117,6 +117,41 @@ export const RouteInfo = ({ routeData, isCircular }) => {
   // Limit to 1-5 places
   const places = filteredPlaces.slice(0, Math.min(5, Math.max(1, filteredPlaces.length)))
 
+  // Function to export route to Google Maps
+  const exportToGoogleMaps = () => {
+    if (!routeData || !routeData.route || !routeData.route.coordinates) return
+
+    const coords = routeData.route.coordinates
+    if (coords.length < 2) return
+
+    // Get start and end coordinates
+    const start = coords[0] // [lng, lat]
+    const end = coords[coords.length - 1] // [lng, lat]
+
+    // Build Google Maps URL
+    // Format: https://www.google.com/maps/dir/?api=1&origin=LAT,LNG&destination=LAT,LNG&waypoints=LAT,LNG|LAT,LNG&travelmode=walking
+    let url = `https://www.google.com/maps/dir/?api=1`
+    url += `&origin=${start[1]},${start[0]}`
+    url += `&destination=${end[1]},${end[0]}`
+
+    // Add waypoints if we have places with coordinates
+    if (places.length > 0) {
+      const waypoints = places
+        .filter(p => p.latitude && p.longitude)
+        .map(p => `${p.latitude},${p.longitude}`)
+        .join('|')
+
+      if (waypoints) {
+        url += `&waypoints=${waypoints}`
+      }
+    }
+
+    url += `&travelmode=walking`
+
+    // Open in new tab/window (will open Google Maps app on mobile if available)
+    window.open(url, '_blank')
+  }
+
   return (
     <div className="route-info">
       <h3>Your {routeData.vibe} walk {routeData.config.emoji}</h3>
@@ -137,6 +172,15 @@ export const RouteInfo = ({ routeData, isCircular }) => {
       </div>
 
       <p className="route-description">{routeData.description}</p>
+
+      <button
+        className="export-button"
+        onClick={exportToGoogleMaps}
+        title="Open this route in Google Maps"
+      >
+        <span className="export-icon">📍</span>
+        Open in Google Maps
+      </button>
 
       <div className="places-section">
         <h4>Places that shaped your route ({places.length})</h4>
