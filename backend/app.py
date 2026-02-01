@@ -166,43 +166,57 @@ def generate_route():
         route_params = calculate_route_parameters(duration, vibe, is_circular)
         search_radius = route_params['search_radius']
 
-        # Check if area is already indexed in our database
-        if not place_service.is_area_indexed(latitude, longitude, search_radius):
-            # Discover all places in area
-            raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, latitude, longitude, search_radius)
-
-            # Categorize each place (static mapping or LLM for unknown types)
-            places_to_save = []
-            for place in raw_places:
-                vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
-                places_to_save.append((place, vibes, source))
-
-            # Bulk save to database
-            if places_to_save:
-                place_service.save_places_bulk(places_to_save)
-
-            # Mark area as indexed
-            place_service.mark_area_indexed(latitude, longitude, search_radius)
-
-        # Query places for the requested vibe from database
-        places = place_service.get_places_by_vibe(latitude, longitude, search_radius, vibe)
-
-        # If no places found in database, expand search radius
-        if not places:
-            expanded_radius = min(search_radius * 2, 10000)
-
-            # Check if expanded area needs indexing
-            if not place_service.is_area_indexed(latitude, longitude, expanded_radius):
-                raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, latitude, longitude, expanded_radius)
+        # Helper function to index and get places for a single point
+        def index_and_get_places(lat, lon, radius):
+            """Index area if needed and return places for the vibe"""
+            if not place_service.is_area_indexed(lat, lon, radius):
+                raw_places = discover_all_places(GOOGLE_MAPS_API_KEY, lat, lon, radius)
                 places_to_save = []
                 for place in raw_places:
                     vibes, source = place_service.categorize_place(place, OPENROUTER_API_KEY)
                     places_to_save.append((place, vibes, source))
                 if places_to_save:
                     place_service.save_places_bulk(places_to_save)
-                place_service.mark_area_indexed(latitude, longitude, expanded_radius)
+                place_service.mark_area_indexed(lat, lon, radius)
+            return place_service.get_places_by_vibe(lat, lon, radius, vibe)
 
-            places = place_service.get_places_by_vibe(latitude, longitude, expanded_radius, vibe)
+        # For one-way routes, search along the entire path (start, midpoint, destination)
+        if not is_circular and destination:
+            dest_lat = destination['latitude']
+            dest_lon = destination['longitude']
+
+            # Calculate midpoint
+            mid_lat = (latitude + dest_lat) / 2
+            mid_lon = (longitude + dest_lon) / 2
+
+            # Use smaller radius for corridor search (covers more area with less overlap)
+            corridor_radius = min(search_radius, 1000)
+
+            # Search at start, midpoint, and destination
+            search_points = [
+                (latitude, longitude),
+                (mid_lat, mid_lon),
+                (dest_lat, dest_lon)
+            ]
+
+            # Collect places from all points, avoiding duplicates by place_id
+            all_places = {}
+            for lat, lon in search_points:
+                point_places = index_and_get_places(lat, lon, corridor_radius)
+                for place in point_places:
+                    place_id = place.get('place_id') or f"{place['latitude']},{place['longitude']}"
+                    if place_id not in all_places:
+                        all_places[place_id] = place
+
+            places = list(all_places.values())
+        else:
+            # Circular route - search around start point only
+            places = index_and_get_places(latitude, longitude, search_radius)
+
+            # If no places found, expand search radius
+            if not places:
+                expanded_radius = min(search_radius * 2, 10000)
+                places = index_and_get_places(latitude, longitude, expanded_radius)
 
         # Fallback to direct API call if still no places
         if not places:
