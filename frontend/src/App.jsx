@@ -138,17 +138,17 @@ function App() {
           onClearLocation={handleClearLocation}
         />
 
-        <DurationSelector
-          duration={duration}
-          onDurationChange={setDuration}
-        />
-
         <RouteTypeSelector
           isCircular={isCircular}
           onToggle={setIsCircular}
         />
 
-        {!isCircular && (
+        {isCircular ? (
+          <DurationSelector
+            duration={duration}
+            onDurationChange={setDuration}
+          />
+        ) : (
           <DestinationSelector
             destination={destination}
             onDestinationChange={setDestination}
@@ -162,7 +162,7 @@ function App() {
         <button
           className="generate-button"
           onClick={handleGenerateRoute}
-          disabled={loading || !activeLocation || !duration}
+          disabled={loading || !activeLocation || (isCircular ? !duration : !geocodedDestination)}
           style={{ backgroundColor: getVibeColor(selectedVibe) }}
         >
           {loading ? (
