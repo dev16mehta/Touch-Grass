@@ -195,6 +195,7 @@ function App() {
           location={activeLocation}
           routeData={routeData}
           selectedVibe={selectedVibe}
+          isCircular={isCircular}
         />
         <PlacesPopup routeData={routeData} />
       </div>

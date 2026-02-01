@@ -16,7 +16,7 @@ const getVibeColor = (vibe) => {
   return colors[vibe] || '#3b82f6'
 }
 
-export const Map = ({ location, routeData, selectedVibe }) => {
+export const Map = ({ location, routeData, selectedVibe, isCircular = true }) => {
   const mapContainer = useRef(null)
   const map = useRef(null)
 
@@ -60,8 +60,8 @@ export const Map = ({ location, routeData, selectedVibe }) => {
     // Remove existing markers (except user location red marker)
     const markers = document.querySelectorAll('.mapboxgl-marker:not([style*="rgb(255, 0, 0)"])')
     markers.forEach(marker => marker.remove())
-    // Also remove start markers
-    document.querySelectorAll('.start-marker').forEach(el => el.closest('.mapboxgl-marker')?.remove())
+    // Also remove start/end markers
+    document.querySelectorAll('.start-marker, .end-marker').forEach(el => el.closest('.mapboxgl-marker')?.remove())
 
     // Add route line
     const coordinates = routeData.route.coordinates || routeData.route
@@ -165,6 +165,29 @@ export const Map = ({ location, routeData, selectedVibe }) => {
         .setLngLat(coordinates[0])
         .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML('<h3>Starting Point</h3><p>Your walk begins here</p>'))
         .addTo(map.current)
+
+      // Add end marker for one-way routes
+      if (!isCircular && coordinates.length > 1) {
+        const endEl = document.createElement('div')
+        endEl.className = 'end-marker'
+        endEl.innerHTML = `
+          <div style="
+            background: ${getVibeColor(selectedVibe)};
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            white-space: nowrap;
+          ">End</div>
+        `
+
+        new mapboxgl.Marker({ element: endEl, anchor: 'bottom' })
+          .setLngLat(coordinates[coordinates.length - 1])
+          .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML('<h3>Destination</h3><p>Your walk ends here</p>'))
+          .addTo(map.current)
+      }
     }
 
     // Fit map to route bounds
@@ -172,7 +195,7 @@ export const Map = ({ location, routeData, selectedVibe }) => {
     coordinates.forEach(coord => bounds.extend(coord))
     map.current.fitBounds(bounds, { padding: 50 })
 
-  }, [routeData, selectedVibe])
+  }, [routeData, selectedVibe, isCircular])
 
   return <div ref={mapContainer} className="map" />
 }
