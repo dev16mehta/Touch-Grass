@@ -57,9 +57,11 @@ export const Map = ({ location, routeData, selectedVibe }) => {
       map.current.removeSource('route')
     }
 
-    // Remove existing markers (except user location)
+    // Remove existing markers (except user location red marker)
     const markers = document.querySelectorAll('.mapboxgl-marker:not([style*="rgb(255, 0, 0)"])')
     markers.forEach(marker => marker.remove())
+    // Also remove start markers
+    document.querySelectorAll('.start-marker').forEach(el => el.closest('.mapboxgl-marker')?.remove())
 
     // Add route line
     const coordinates = routeData.route.coordinates || routeData.route
@@ -141,6 +143,29 @@ export const Map = ({ location, routeData, selectedVibe }) => {
         .setPopup(popup)
         .addTo(map.current)
     })
+
+    // Add starting point marker
+    if (coordinates.length > 0) {
+      const startEl = document.createElement('div')
+      startEl.className = 'start-marker'
+      startEl.innerHTML = `
+        <div style="
+          background: ${getVibeColor(selectedVibe)};
+          color: white;
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: bold;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          white-space: nowrap;
+        ">Start</div>
+      `
+
+      new mapboxgl.Marker({ element: startEl, anchor: 'bottom' })
+        .setLngLat(coordinates[0])
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML('<h3>Starting Point</h3><p>Your walk begins here</p>'))
+        .addTo(map.current)
+    }
 
     // Fit map to route bounds
     const bounds = new mapboxgl.LngLatBounds()
