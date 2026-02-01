@@ -52,6 +52,38 @@ def get_vibes():
     })
 
 
+@app.route('/api/geocode', methods=['POST'])
+def geocode():
+    """Geocode a location string to coordinates"""
+    try:
+        data = request.json
+        location_name = data.get('location', '').strip()
+
+        if not location_name:
+            return jsonify({'error': 'Location string is required'}), 400
+
+        # Geocode the location
+        geocoded = geocode_location(GOOGLE_MAPS_API_KEY, location_name)
+
+        if geocoded:
+            return jsonify({
+                'geocoded_location': {
+                    'latitude': geocoded['latitude'],
+                    'longitude': geocoded['longitude'],
+                    'formatted_address': geocoded['formatted_address'],
+                    'name': location_name
+                }
+            })
+        else:
+            return jsonify({'error': f'Could not find location: {location_name}'}), 404
+
+    except Exception as e:
+        print(f"Error geocoding: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/detect-vibe', methods=['POST'])
 def detect_vibe():
     """Detect vibe and location from user's text description using LLM"""
@@ -101,10 +133,15 @@ def generate_route():
         longitude = data.get('longitude')
         duration = data.get('duration', 30)
         is_circular = data.get('circular', True)
+        destination = data.get('destination')  # For one-way routes
 
         # Validate inputs
         if not latitude or not longitude:
             return jsonify({'error': 'Location (latitude, longitude) is required'}), 400
+
+        # For one-way routes, validate destination
+        if not is_circular and not destination:
+            return jsonify({'error': 'Destination is required for one-way routes'}), 400
 
         if vibe not in VIBE_CONFIGS:
             return jsonify({'error': f'Invalid vibe. Choose from: {list(VIBE_CONFIGS.keys())}'}), 400
@@ -164,9 +201,14 @@ def generate_route():
                 places = get_google_places(GOOGLE_MAPS_API_KEY, latitude, longitude, vibe, min(search_radius * 2, 10000))
 
         # Optimize waypoints
+        # For one-way routes, pass destination coordinates
+        dest_coords = None
+        if not is_circular and destination:
+            dest_coords = (destination['latitude'], destination['longitude'])
+
         waypoints = optimize_waypoints(
             latitude, longitude, places.copy(),
-            route_params['target_distance'], vibe, is_circular
+            route_params['target_distance'], vibe, is_circular, dest_coords
         )
 
         # Get directions

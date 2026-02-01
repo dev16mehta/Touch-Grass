@@ -18,11 +18,12 @@ export const detectVibe = async (moodText) => {
 /**
  * Generate walking route based on parameters
  */
-export const generateRoute = async ({ vibe, latitude, longitude, duration, circular }) => {
+export const generateRoute = async ({ vibe, latitude, longitude, destination, duration, circular }) => {
   const response = await axios.post(`${API_URL}/generate-route`, {
     vibe,
     latitude,
     longitude,
+    destination,
     duration,
     circular
   })

@@ -44,6 +44,9 @@ export const Map = ({ location, routeData, selectedVibe }) => {
     if (!routeData || !map.current) return
 
     // Clear existing layers and sources
+    if (map.current.getLayer('route-arrows')) {
+      map.current.removeLayer('route-arrows')
+    }
     if (map.current.getLayer('route')) {
       map.current.removeLayer('route')
     }
@@ -103,6 +106,26 @@ export const Map = ({ location, routeData, selectedVibe }) => {
         'line-color': getVibeColor(selectedVibe),
         'line-width': 6,
         'line-opacity': 0.95
+      }
+    })
+
+    // Add directional arrows along the route
+    map.current.addLayer({
+      id: 'route-arrows',
+      type: 'symbol',
+      source: 'route',
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 50,
+        'text-field': '▶',
+        'text-size': 16,
+        'text-keep-upright': false,
+        'text-rotation-alignment': 'map'
+      },
+      paint: {
+        'text-color': getVibeColor(selectedVibe),
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 2
       }
     })
 

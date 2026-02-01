@@ -100,11 +100,20 @@ def calculate_route_parameters(duration_minutes, vibe, is_circular):
     }
 
 
-def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_circular):
+def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_circular, destination_coords=None):
     """Select optimal waypoints based on route type.
 
     Places should already be filtered to the requested vibe (from place_service).
     Scoring is based purely on rating since all places in the vibe are equal.
+
+    Args:
+        start_lat: Starting latitude
+        start_lon: Starting longitude
+        places: List of places to choose from
+        target_distance: Target route distance in meters
+        vibe: Vibe string
+        is_circular: Whether route should be circular
+        destination_coords: Optional (lat, lon) tuple for one-way route destination
     """
     if not places:
         return create_simple_circular_route(start_lat, start_lon, target_distance)
@@ -236,7 +245,7 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
             return create_simple_circular_route(start_lat, start_lon, target_distance)
 
     else:
-        # One-way: select endpoint and waypoints based on rating
+        # One-way: use provided destination or select endpoint
         # (places are already filtered to the requested vibe)
 
         # Score places - use rating-based scoring
@@ -251,39 +260,51 @@ def optimize_waypoints(start_lat, start_lon, places, target_distance, vibe, is_c
         scored_places = [(p, local_score(p)) for p in filtered_places]
         scored_places.sort(key=lambda x: x[1], reverse=True)
 
-        # Endpoint should be ~20% of target distance
-        target_endpoint_dist = target_distance * 0.2
-
-        # Find endpoint from high-scoring places
-        if scored_places:
-            # Select from top vibe-matching places
-            top_candidates = [p for p, score in scored_places if score > 50]
-            if not top_candidates:
-                top_candidates = [p for p, _ in scored_places]
-
-            # Use vibe hash for consistent variety
-            vibe_index = hash(vibe) % min(3, len(top_candidates))
-            endpoint_candidates = top_candidates[:3] if len(top_candidates) >= 3 else top_candidates
-
-            # Pick endpoint close to target distance
-            endpoint = min(
-                endpoint_candidates,
-                key=lambda p: abs(
-                    calculate_distance(start_lat, start_lon, p['latitude'], p['longitude'])
-                    - target_endpoint_dist
-                )
-            )
-
-            # Remove endpoint from scored places
-            remaining_places = [(p, s) for p, s in scored_places if p != endpoint]
+        # Check if destination coordinates are provided
+        if destination_coords:
+            # Use provided destination as endpoint
+            endpoint_lat, endpoint_lon = destination_coords
+            endpoint = {
+                'latitude': endpoint_lat,
+                'longitude': endpoint_lon,
+                'name': 'Destination'
+            }
+            # Use all scored places for intermediates
+            remaining_places = scored_places
         else:
-            # Use farthest place within max_distance
-            endpoint = max(
-                [p for p in places if calculate_distance(start_lat, start_lon, p['latitude'], p['longitude']) <= max_distance],
-                key=lambda p: calculate_distance(start_lat, start_lon, p['latitude'], p['longitude']),
-                default=places[0] if places else None
-            )
-            remaining_places = []
+            # Endpoint should be ~20% of target distance
+            target_endpoint_dist = target_distance * 0.2
+
+            # Find endpoint from high-scoring places
+            if scored_places:
+                # Select from top vibe-matching places
+                top_candidates = [p for p, score in scored_places if score > 50]
+                if not top_candidates:
+                    top_candidates = [p for p, _ in scored_places]
+
+                # Use vibe hash for consistent variety
+                vibe_index = hash(vibe) % min(3, len(top_candidates))
+                endpoint_candidates = top_candidates[:3] if len(top_candidates) >= 3 else top_candidates
+
+                # Pick endpoint close to target distance
+                endpoint = min(
+                    endpoint_candidates,
+                    key=lambda p: abs(
+                        calculate_distance(start_lat, start_lon, p['latitude'], p['longitude'])
+                        - target_endpoint_dist
+                    )
+                )
+
+                # Remove endpoint from scored places
+                remaining_places = [(p, s) for p, s in scored_places if p != endpoint]
+            else:
+                # Use farthest place within max_distance
+                endpoint = max(
+                    [p for p in places if calculate_distance(start_lat, start_lon, p['latitude'], p['longitude']) <= max_distance],
+                    key=lambda p: calculate_distance(start_lat, start_lon, p['latitude'], p['longitude']),
+                    default=places[0] if places else None
+                )
+                remaining_places = []
 
         # Select 1 intermediate waypoint between start and endpoint
         intermediates = []

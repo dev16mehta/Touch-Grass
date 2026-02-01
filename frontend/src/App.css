@@ -53,6 +53,8 @@
   font-weight: 700;
   letter-spacing: -0.5px;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
 }
 
 .tagline {
@@ -571,6 +573,130 @@
   letter-spacing: 0.2px;
 }
 
+/* Destination Selector */
+.destination-selector {
+  margin-bottom: 1.75rem;
+}
+
+.destination-selector h3 {
+  font-size: 1.2rem;
+  margin-bottom: 0.875rem;
+  opacity: 0.95;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.destination-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.destination-input {
+  flex: 1;
+  padding: 1.125rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2937;
+  transition: all 0.25s ease;
+}
+
+.destination-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
+  background: white;
+}
+
+.destination-input::placeholder {
+  color: #9ca3af;
+  letter-spacing: 0.1px;
+}
+
+.geocode-button {
+  padding: 1.125rem;
+  font-size: 1.25rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.geocode-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.geocode-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.geocoded-destination {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.geocoded-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.geocoded-icon {
+  font-size: 1.5rem;
+}
+
+.geocoded-details {
+  flex: 1;
+}
+
+.geocoded-address {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  display: block;
+}
+
+.clear-dest-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.clear-dest-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
 /* Route Type Selector */
 .route-type-selector {
   margin-bottom: 1.75rem;
@@ -882,5 +1008,84 @@
   }
   50% {
     transform: scale(1.1);
+  }
+}
+
+/* ===== ICON STYLES ===== */
+.header-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+  color: rgba(255, 255, 255, 0.95);
+  animation: gentle-sway 4s ease-in-out infinite;
+}
+
+@keyframes gentle-sway {
+  0%, 100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+.button-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+}
+
+/* Growing animation for loading states */
+.growing {
+  animation: grow-and-sway 1.5s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes grow-and-sway {
+  0% {
+    transform: scale(0.8) rotate(-5deg);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8) rotate(-5deg);
+    opacity: 0.6;
+  }
+}
+
+/* Spinning animation for loading spinner */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Vine growth effect for buttons during loading */
+button:disabled .growing {
+  animation: vine-growth 2s ease-in-out infinite;
+}
+
+@keyframes vine-growth {
+  0% {
+    transform: scale(0.5) translateY(10px);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) translateY(-2px) rotate(10deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.5) translateY(10px);
+    opacity: 0;
   }
 }

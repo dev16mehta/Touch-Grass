@@ -1,6 +1,8 @@
 /**
  * Mood selector component for detecting user vibe and location
  */
+import { Sprout, MapPin, X } from 'lucide-react'
+
 export const MoodSelector = ({
   moodText,
   onMoodTextChange,
@@ -12,7 +14,7 @@ export const MoodSelector = ({
 }) => {
   return (
     <div className="mood-selector">
-      <h2>How are you feeling?</h2>
+      <h2>What's the mood for today's walk?</h2>
       <div className="mood-input-group">
         <textarea
           className="mood-input"
@@ -26,7 +28,17 @@ export const MoodSelector = ({
           onClick={onDetect}
           disabled={detecting || !moodText.trim()}
         >
-          {detecting ? 'Detecting...' : '✨ Detect Vibe'}
+          {detecting ? (
+            <>
+              <Sprout className="button-icon growing" />
+              Reading the vibe...
+            </>
+          ) : (
+            <>
+              <Sprout className="button-icon" />
+              Detect Vibe
+            </>
+          )}
         </button>
       </div>
 
@@ -38,7 +50,7 @@ export const MoodSelector = ({
             <span className="detected-desc">{detectedVibe.description}</span>
             {detectedLocation && (
               <span className="detected-location">
-                📍 {detectedLocation.name || detectedLocation.formatted_address}
+                <MapPin size={14} /> {detectedLocation.name || detectedLocation.formatted_address}
               </span>
             )}
           </div>
@@ -48,7 +60,7 @@ export const MoodSelector = ({
               onClick={onClearLocation}
               title="Use my current location instead"
             >
-              ✕
+              <X size={16} />
             </button>
           )}
         </div>
