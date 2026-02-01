@@ -1,28 +1,50 @@
-# 🌿 Touch Grass - Mood-Based Walking Routes
+# 🌿 Touch Grass
 
-A web app that generates personalized walking routes based on your mood/vibe using AI and real-time location data.
+Stop doomscrolling, start exploring. Touch Grass transforms your mood into personalized walking routes, guiding you through adventures tailored to your vibe.
 
-## Features
+## Overview
 
-- **4 Unique Vibes**:
-  - 🌿 Chill - Relaxing walks with parks and quiet spots
-  - 💕 Date - Romantic routes with cafes and scenic views
-  - 🍻 Chaos - Energetic walks with bars and nightlife
-  - 📸 Aesthetic - Instagram-worthy spots and viewpoints
+Touch Grass is a mood-based walking route generator that uses AI to understand how you're feeling and creates real walking routes with actual footpaths, POIs, and turn-by-turn directions. Whether you want a peaceful stroll through parks or a chaotic bar-hopping adventure, we've got you covered.
 
-- **AI-Powered Descriptions** using Google Gemini API
-- **Interactive Maps** with Mapbox
-- **Real-time Location** based route generation
-- **Beautiful UI** with responsive design
+## Key Features
+
+**🤖 AI Mood Detection**
+- Type how you're feeling in natural language
+- Gemini AI extracts your vibe and optional location mentions
+- 4 unique vibes: Chill, Date, Chaos, Aesthetic
+
+**🗺️ Smart Route Generation**
+- Real walking routes using Google Maps Directions API
+- Duration-based planning (10-120 minutes)
+- Circular routes (return to start) or one-way routes
+- Custom destination input for one-way routes
+- POI selection based on your vibe (parks, cafes, bars, landmarks)
+
+**📍 Interactive Maps**
+- Beautiful map visualization with Mapbox GL
+- Directional arrows showing your path
+- Place markers with details and ratings
+- Auto-fit to route bounds
+
+**🎨 Nature-Themed UI**
+- Consistent icon system with Lucide React
+- Plant-growth animations for loading states
+- Vibe-specific color schemes
+- Responsive design for mobile and desktop
 
 ## Tech Stack
 
-- **Backend**: Python 3.11 + Flask
-- **Frontend**: React + Vite + JavaScript
-- **APIs**:
-  - Google Gemini (AI descriptions)
-  - Mapbox (Maps & Places)
-- **Styling**: CSS3 with modern gradients
+**Backend**
+- Python 3.11 + Flask
+- Google Gemini AI (mood detection)
+- Google Maps Directions API (real walking routes)
+- Google Places API (POI discovery)
+
+**Frontend**
+- React + Vite
+- Mapbox GL (map visualization)
+- Lucide React (icons)
+- CSS3 with animations
 
 ## Project Structure
 
@@ -43,136 +65,131 @@ Touch-Grass/
 └── README.md
 ```
 
-## Setup Instructions
+## Quick Start
 
 ### Prerequisites
-- Python 3.11
+- Python 3.11+
 - Node.js 18+ and npm
-- Gemini API key
-- Mapbox API key
+- Google Gemini API key
+- Google Maps API key (with Directions & Places APIs enabled)
+- Mapbox access token
 
 ### Backend Setup
 
-1. Navigate to backend directory:
-```bash
-cd backend
-```
+1. **Navigate to backend and create virtual environment:**
+   ```bash
+   cd backend
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-2. Create and activate virtual environment:
-```bash
-python3.11 -m venv venv
-source venv/bin/activate
-```
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+3. **Create `.env` file in `backend/` directory:**
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
+   GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+   ```
 
-4. Create `.env` file (already created with your keys):
-```
-GEMINI_API_KEY=your_gemini_key
-MAPBOX_TOKEN=your_mapbox_token
-```
-
-5. Run the Flask server:
-```bash
-python app.py
-```
-
-Backend will run on `http://localhost:5000`
+4. **Run the server:**
+   ```bash
+   python app.py
+   ```
+   Backend runs on `http://localhost:5001`
 
 ### Frontend Setup
 
-1. Navigate to frontend directory:
-```bash
-cd frontend
-```
+1. **Navigate to frontend and install dependencies:**
+   ```bash
+   cd frontend
+   npm install
+   ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+2. **Create `.env` file in `frontend/` directory:**
+   ```env
+   VITE_MAPBOX_TOKEN=your_mapbox_token_here
+   VITE_API_URL=http://localhost:5001/api
+   ```
 
-3. Create `.env` file (already created):
-```
-VITE_MAPBOX_TOKEN=your_mapbox_token
-VITE_API_URL=http://localhost:5000/api
-```
-
-4. Run the development server:
-```bash
-npm run dev
-```
-
-Frontend will run on `http://localhost:5173`
+3. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+   Frontend runs on `http://localhost:5173`
 
 ## Usage
 
-1. Start both backend and frontend servers
-2. Open `http://localhost:5173` in your browser
-3. Allow location access when prompted
-4. Select your vibe (chill, date, chaos, or aesthetic)
-5. Click "Generate Route"
-6. Explore your personalized walking route on the map!
+1. **Start both servers** (backend and frontend)
+2. **Open** `http://localhost:5173` in your browser
+3. **Allow location access** when prompted
+4. **Describe your mood** in the text box (e.g., "I want to relax in Central Park")
+5. **Click "Detect Vibe"** to let AI understand your mood
+6. **Set duration** (10-120 minutes) and route type (circular or one-way)
+7. **For one-way routes:** optionally specify a destination
+8. **Click "Start Exploring"** to generate your route
+9. **View your route** on the map with turn-by-turn directions!
 
-## API Endpoints
+## How It Works
 
-### GET `/api/health`
-Health check endpoint
+1. **Mood Detection**: Gemini AI analyzes your text to determine your vibe and extract any location mentions
+2. **Route Calculation**: Based on duration and vibe, we calculate target distance using pace multipliers (chill walks slower, chaos walks faster)
+3. **POI Selection**: Google Places API finds relevant spots matching your vibe within the search radius
+4. **Route Optimization**: For circular routes, waypoints are positioned at ~120° intervals to create true loops. For one-way routes, we select intermediates between start and destination
+5. **Directions**: Google Directions API generates real walking routes with actual footpaths
+6. **Visualization**: Mapbox renders the route with directional arrows and place markers
 
-### GET `/api/vibes`
-Returns available vibes with descriptions
+## Project Structure
 
-### POST `/api/generate-route`
-Generate a walking route
-```json
-{
-  "vibe": "chill",
-  "latitude": 37.7749,
-  "longitude": -122.4194,
-  "radius": 2000
-}
+```
+Touch-Grass/
+├── backend/
+│   ├── app.py                    # Flask API server
+│   ├── config.py                 # Vibe configurations
+│   ├── services/
+│   │   ├── ai_service.py         # Gemini mood detection
+│   │   ├── maps_service.py       # Google Maps integration
+│   │   ├── place_service.py      # POI filtering
+│   │   └── route_service.py      # Route optimization
+│   ├── utils/
+│   │   └── geo_utils.py          # Distance & angle calculations
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx               # Main component
+│   │   ├── components/           # UI components
+│   │   ├── hooks/                # Custom React hooks
+│   │   └── services/             # API client
+│   └── package.json
+└── README.md
 ```
 
-## Development
+## Building for Production
 
-### Running Backend Tests
-```bash
-cd backend
-source venv/bin/activate
-python app.py
-```
-
-### Running Frontend in Dev Mode
-```bash
-cd frontend
-npm run dev
-```
-
-### Building for Production
+**Frontend:**
 ```bash
 cd frontend
 npm run build
 ```
 
-## Hackathon Notes
-
-This project was built for a hackathon with the following team split:
-- Route logic & Backend API
-- UI & Map Integration
-- Vibe/AI Layer
+**Backend:**
+Use a production WSGI server like Gunicorn:
+```bash
+pip install gunicorn
+gunicorn app:app
+```
 
 ## Future Enhancements
 
-- [ ] Spotify integration for vibe matching
-- [ ] Save favorite routes
-- [ ] Share routes with friends
-- [ ] Weather-based recommendations
-- [ ] Time-of-day optimizations
-- [ ] User reviews for places
-- [ ] Supabase/DigitalOcean integration
+- Social features (share routes, see popular routes)
+- Route history and favorites
+- Weather integration (covered paths when raining)
+- Accessibility options (wheelchair-friendly routes)
+- Gamification (badges, streaks)
+- Multi-day route planning
 
-## License
+---
 
-MIT License - Built for hackathon fun!
+**Built with ❤️ for a hackathon** - Stop doomscrolling, start exploring! 🌿

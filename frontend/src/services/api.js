@@ -19,14 +19,24 @@ export const detectVibe = async (moodText) => {
  * Generate walking route based on parameters
  */
 export const generateRoute = async ({ vibe, latitude, longitude, destination, duration, circular }) => {
-  const response = await axios.post(`${API_URL}/generate-route`, {
+  const payload = {
     vibe,
     latitude,
     longitude,
-    destination,
-    duration,
     circular
-  })
+  }
+
+  // Only include duration if it's a valid number (for circular routes)
+  if (duration && !isNaN(duration)) {
+    payload.duration = Number(duration)
+  }
+
+  // Only include destination for one-way routes
+  if (destination) {
+    payload.destination = destination
+  }
+
+  const response = await axios.post(`${API_URL}/generate-route`, payload)
   return response.data
 }
 
